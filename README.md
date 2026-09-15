@@ -15,6 +15,13 @@ sw.js           lets it work offline once installed
 icons/          app icons
 ```
 
+## Updating your already-live app
+
+Already deployed this once? Just replace the files in your repo with the
+ones in this folder (same filenames) and push/upload again — no new repo or
+Pages setup needed. Give it a minute, then reload the app on your phone. If
+it looks unchanged, force-quit it from the home screen and reopen.
+
 ## Deploy it (pick one — both are free)
 
 ### Option A: GitHub Pages
@@ -86,4 +93,3 @@ It's plain HTML/CSS/JS, so it's easy to tweak by hand or ask Claude to edit:
   `fieldsToFormType`, `deriveTitle`, `deriveMeta`) and the matching form
   markup in `index.html` — add a field in both places to extend a type, or
   copy the pattern to add a whole new type.
-# Trip-Planner

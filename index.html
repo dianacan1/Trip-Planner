@@ -6,7 +6,7 @@
 <title>Trip Planner</title>
 
 <link rel="manifest" href="manifest.json" />
-<meta name="theme-color" content="#1B2A3D" />
+<meta name="theme-color" content="#16342A" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <meta name="apple-mobile-web-app-title" content="Trips" />
@@ -15,7 +15,7 @@
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 
 <link rel="stylesheet" href="style.css" />
 </head>
@@ -44,16 +44,15 @@
           <input type="text" id="tripName" placeholder="e.g. Portugal &amp; Spain" required />
         </label>
 
-        <div class="field-row">
-          <label class="field">
-            <span>Start date</span>
-            <input type="date" id="tripStart" required />
-          </label>
-          <label class="field">
-            <span>End date</span>
-            <input type="date" id="tripEnd" required />
-          </label>
-        </div>
+        <label class="field">
+          <span>Trip dates</span>
+          <button type="button" class="date-trigger" id="dateTrigger">
+            <span class="dt-value placeholder" id="dateTriggerLabel">Choose your dates</span>
+            <span class="dt-icon" aria-hidden="true">&#128197;</span>
+          </button>
+          <input type="hidden" id="tripStart" required />
+          <input type="hidden" id="tripEnd" required />
+        </label>
 
         <button type="submit" class="btn btn-navy">Save trip</button>
       </form>
@@ -190,6 +189,69 @@
     </button>
   </nav>
 
+</div>
+
+<!-- ===================== CALENDAR SHEET ===================== -->
+<div class="sheet-backdrop" id="calBackdrop" hidden>
+  <div class="sheet" id="calSheet">
+    <div class="sheet-grabber"></div>
+    <div class="sheet-header">
+      <span class="sheet-title">Trip dates</span>
+      <button type="button" class="sheet-close" id="calClose" aria-label="Close">&#10005;</button>
+    </div>
+
+    <div class="cal-nav">
+      <button type="button" class="cal-nav-btn" id="calPrev" aria-label="Previous month">&#8249;</button>
+      <span class="cal-month-label" id="calMonthLabel"></span>
+      <button type="button" class="cal-nav-btn" id="calNext" aria-label="Next month">&#8250;</button>
+    </div>
+
+    <div class="cal-weekdays">
+      <span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span>
+    </div>
+    <div class="cal-grid" id="calGrid"></div>
+
+    <p class="cal-hint" id="calHint">Tap a start date, then an end date.</p>
+
+    <div class="sheet-actions">
+      <button type="button" class="btn btn-ghost" id="calClear">Clear</button>
+      <button type="button" class="btn btn-navy" id="calDone">Done</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== ITEM EDIT SHEET (Plan tab quick edit) ===================== -->
+<div class="sheet-backdrop" id="editBackdrop" hidden>
+  <div class="sheet" id="editSheet">
+    <div class="sheet-grabber"></div>
+    <div class="sheet-header">
+      <span class="sheet-title" id="editSheetTitle">Edit</span>
+      <button type="button" class="sheet-close" id="editClose" aria-label="Close">&#10005;</button>
+    </div>
+
+    <label class="field">
+      <span>Title</span>
+      <input type="text" id="edit_title" />
+    </label>
+
+    <label class="field">
+      <span>Time on this day</span>
+      <input type="time" id="edit_time" />
+    </label>
+
+    <label class="field">
+      <span>Notes</span>
+      <textarea id="edit_notes" rows="3" placeholder="Add a note..."></textarea>
+    </label>
+
+    <div class="sheet-actions">
+      <button type="button" class="btn btn-navy" id="editSave">Save</button>
+    </div>
+    <div class="edit-sheet-footer">
+      <button type="button" class="btn-link" id="editFullForm">Edit all details &rarr;</button>
+      <button type="button" class="btn-link danger" id="editDelete">Remove</button>
+    </div>
+  </div>
 </div>
 
 <div id="toast" class="toast" hidden></div>

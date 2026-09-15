@@ -80,6 +80,13 @@
     return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
   }
 
+  function formatHHMM(hhmm) {
+    if (!hhmm) return "";
+    const d = new Date(`2000-01-01T${hhmm}`);
+    if (isNaN(d)) return "";
+    return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  }
+
   function formatDateTimeShort(dtLocal) {
     if (!dtLocal) return "";
     const d = new Date(dtLocal);
@@ -114,17 +121,38 @@
     btn.addEventListener("click", () => switchView(btn.dataset.view));
   });
 
+  // ---------- Generic bottom-sheet helpers ----------
+  function openSheet(backdropId) {
+    document.getElementById(backdropId).hidden = false;
+  }
+  function closeSheet(backdropId) {
+    document.getElementById(backdropId).hidden = true;
+  }
+
   // ---------- Trip form ----------
   const tripForm = document.getElementById("tripForm");
   const tripNameInput = document.getElementById("tripName");
   const tripStartInput = document.getElementById("tripStart");
   const tripEndInput = document.getElementById("tripEnd");
+  const dateTrigger = document.getElementById("dateTrigger");
+  const dateTriggerLabel = document.getElementById("dateTriggerLabel");
 
   function loadTripFormFromState() {
     tripNameInput.value = state.trip.name || "";
     tripStartInput.value = state.trip.start || "";
     tripEndInput.value = state.trip.end || "";
+    updateDateTriggerLabel();
     renderTripSummary();
+  }
+
+  function updateDateTriggerLabel() {
+    if (tripStartInput.value && tripEndInput.value) {
+      dateTriggerLabel.textContent = `${formatShortDate(tripStartInput.value)} \u2013 ${formatShortDate(tripEndInput.value)}`;
+      dateTriggerLabel.classList.remove("placeholder");
+    } else {
+      dateTriggerLabel.textContent = "Choose your dates";
+      dateTriggerLabel.classList.add("placeholder");
+    }
   }
 
   function renderTripSummary() {
@@ -145,7 +173,11 @@
     e.preventDefault();
     const start = tripStartInput.value;
     const end = tripEndInput.value;
-    if (start && end && end < start) {
+    if (!start || !end) {
+      showToast("Pick your trip dates first");
+      return;
+    }
+    if (end < start) {
       showToast("End date is before the start date");
       return;
     }
@@ -166,6 +198,120 @@
       showToast("All data cleared");
     }
   });
+
+  // ---------- Calendar range picker ----------
+  let calViewMonth = new Date(); // first-of-month being displayed
+  let calTempStart = null; // "YYYY-MM-DD" or null
+  let calTempEnd = null;
+
+  dateTrigger.addEventListener("click", () => {
+    calTempStart = tripStartInput.value || null;
+    calTempEnd = tripEndInput.value || null;
+    calViewMonth = calTempStart ? startOfMonth(parseDateOnly(calTempStart)) : startOfMonth(new Date());
+    renderCalendar();
+    openSheet("calBackdrop");
+  });
+
+  document.getElementById("calClose").addEventListener("click", () => closeSheet("calBackdrop"));
+  document.getElementById("calBackdrop").addEventListener("click", (e) => {
+    if (e.target.id === "calBackdrop") closeSheet("calBackdrop");
+  });
+
+  document.getElementById("calPrev").addEventListener("click", () => {
+    calViewMonth = addMonths(calViewMonth, -1);
+    renderCalendar();
+  });
+  document.getElementById("calNext").addEventListener("click", () => {
+    calViewMonth = addMonths(calViewMonth, 1);
+    renderCalendar();
+  });
+
+  document.getElementById("calClear").addEventListener("click", () => {
+    calTempStart = null;
+    calTempEnd = null;
+    renderCalendar();
+  });
+
+  document.getElementById("calDone").addEventListener("click", () => {
+    if (calTempStart && !calTempEnd) calTempEnd = calTempStart;
+    if (calTempStart && calTempEnd) {
+      tripStartInput.value = calTempStart;
+      tripEndInput.value = calTempEnd;
+      updateDateTriggerLabel();
+    }
+    closeSheet("calBackdrop");
+  });
+
+  function startOfMonth(d) { return new Date(d.getFullYear(), d.getMonth(), 1); }
+  function addMonths(d, n) { return new Date(d.getFullYear(), d.getMonth() + n, 1); }
+
+  function renderCalendar() {
+    const label = calViewMonth.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+    document.getElementById("calMonthLabel").textContent = label;
+
+    const grid = document.getElementById("calGrid");
+    grid.innerHTML = "";
+
+    const year = calViewMonth.getFullYear();
+    const month = calViewMonth.getMonth();
+    const firstWeekday = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const daysInPrevMonth = new Date(year, month, 0).getDate();
+    const todayStr = isoDate(new Date());
+
+    const cells = [];
+    for (let i = firstWeekday - 1; i >= 0; i--) {
+      cells.push({ day: daysInPrevMonth - i, otherMonth: true });
+    }
+    for (let d = 1; d <= daysInMonth; d++) {
+      cells.push({ day: d, otherMonth: false, dateStr: isoDate(new Date(year, month, d)) });
+    }
+    while (cells.length % 7 !== 0) {
+      cells.push({ day: cells.length, otherMonth: true });
+    }
+
+    cells.forEach((cell) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "cal-day";
+      btn.textContent = cell.day;
+
+      if (cell.otherMonth) {
+        btn.classList.add("other-month");
+        btn.disabled = true;
+      } else {
+        if (cell.dateStr === todayStr) btn.classList.add("today");
+        if (calTempStart && cell.dateStr === calTempStart) btn.classList.add("range-start");
+        if (calTempEnd && cell.dateStr === calTempEnd) btn.classList.add("range-end");
+        if (calTempStart && calTempEnd && cell.dateStr > calTempStart && cell.dateStr < calTempEnd) {
+          btn.classList.add("in-range");
+        }
+        btn.addEventListener("click", () => onCalDayClick(cell.dateStr));
+      }
+      grid.appendChild(btn);
+    });
+
+    const hint = document.getElementById("calHint");
+    if (calTempStart && calTempEnd) {
+      hint.textContent = `${formatShortDate(calTempStart)} \u2013 ${formatShortDate(calTempEnd)}`;
+    } else if (calTempStart) {
+      hint.textContent = "Now tap an end date.";
+    } else {
+      hint.textContent = "Tap a start date, then an end date.";
+    }
+  }
+
+  function onCalDayClick(dateStr) {
+    if (!calTempStart || (calTempStart && calTempEnd)) {
+      calTempStart = dateStr;
+      calTempEnd = null;
+    } else if (dateStr < calTempStart) {
+      calTempStart = dateStr;
+    } else {
+      calTempEnd = dateStr;
+    }
+    renderCalendar();
+  }
 
   // ---------- Add-item form ----------
   const segmented = document.getElementById("typeSegmented");
@@ -260,7 +406,7 @@
       setVal("s_conf", fields.confirmation);
     } else if (type === "activity") {
       setVal("a_title", fields.title); setVal("a_location", fields.location);
-      setVal("a_time", fields.time); setVal("a_category", fields.category || "eing");
+      setVal("a_time", fields.time); setVal("a_category", fields.category || "Place");
     }
   }
 
@@ -306,6 +452,18 @@
     return isoDate(d);
   }
 
+  // The item's "natural" time as an HH:MM 24h string, for the time-input and default display
+  function deriveDefaultTimeHHMM(type, fields) {
+    const src = type === "flight" ? fields.depart
+      : type === "car" ? fields.pickupTime
+      : type === "stay" ? fields.checkin
+      : null;
+    if (type === "activity") return fields.time || "";
+    if (!src) return "";
+    const match = /T(\d{2}:\d{2})/.exec(src);
+    return match ? match[1] : "";
+  }
+
   itemForm.addEventListener("submit", (e) => {
     e.preventDefault();
     const type = itemTypeInput.value;
@@ -335,6 +493,7 @@
         fields,
         notes,
         date: autoDate,
+        timeOverride: null,
         order: Date.now()
       });
       showToast(autoDate ? `Added and placed on ${formatShortDate(autoDate)}` : "Added to trip");
@@ -418,28 +577,29 @@
   let sortableInstances = [];
 
   function stubTimeLabel(item) {
+    if (item.timeOverride) return formatHHMM(item.timeOverride);
     if (item.type === "flight") return formatTime(item.fields.depart);
     if (item.type === "car") return formatTime(item.fields.pickupTime);
     if (item.type === "stay") return formatTime(item.fields.checkin);
-    if (item.type === "activity") return item.fields.time
-      ? new Date(`2000-01-01T${item.fields.time}`).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })
-      : "";
+    if (item.type === "activity") return item.fields.time ? formatHHMM(item.fields.time) : "";
     return "";
   }
 
   function buildStub(item) {
     const el = document.createElement("div");
-    el.className = "stub";
+    el.className = `stub ${item.type}`;
     el.dataset.id = item.id;
     const time = stubTimeLabel(item);
     el.innerHTML = `
       <div class="stub-time">${time || ""}</div>
-      <div class="stub-divider"></div>
       <div class="stub-body">
         <div class="stub-title">${TYPE_ICONS[item.type]} ${escapeHtml(item.title)}</div>
         <div class="stub-meta">${escapeHtml(deriveMeta(item.type, item.fields))}</div>
+        ${item.notes ? `<div class="stub-meta">${escapeHtml(item.notes)}</div>` : ""}
       </div>
+      <div class="stub-edit-hint" aria-hidden="true">&#8250;</div>
     `;
+    el.addEventListener("click", () => openEditSheet(item.id));
     return el;
   }
 
@@ -455,11 +615,7 @@
     daysContainer.innerHTML = "";
     tray.innerHTML = "";
 
-    if (days.length === 0) {
-      noTripMsg.hidden = false;
-    } else {
-      noTripMsg.hidden = true;
-    }
+    noTripMsg.hidden = days.length !== 0;
 
     // Unassigned tray
     const unassigned = state.items
@@ -470,6 +626,8 @@
     sortableInstances.push(new Sortable(tray, {
       group: "planner",
       animation: 150,
+      delay: 80,
+      delayOnTouchOnly: true,
       ghostClass: "sortable-ghost",
       chosenClass: "sortable-chosen",
       onEnd: handleDragEnd
@@ -497,6 +655,8 @@
       sortableInstances.push(new Sortable(zone, {
         group: "planner",
         animation: 150,
+        delay: 80,
+        delayOnTouchOnly: true,
         ghostClass: "sortable-ghost",
         chosenClass: "sortable-chosen",
         onEnd: handleDragEnd
@@ -521,6 +681,64 @@
     saveState();
   }
 
+  // ---------- Plan-tab inline edit sheet ----------
+  let editingItemId = null;
+
+  function openEditSheet(id) {
+    const item = state.items.find((i) => i.id === id);
+    if (!item) return;
+    editingItemId = id;
+    document.getElementById("editSheetTitle").textContent = `Edit ${TYPE_LABELS[item.type].toLowerCase()}`;
+    document.getElementById("edit_title").value = item.title || "";
+    const timeVal = item.timeOverride || deriveDefaultTimeHHMM(item.type, item.fields);
+    document.getElementById("edit_time").value = timeVal || "";
+    document.getElementById("edit_notes").value = item.notes || "";
+    openSheet("editBackdrop");
+  }
+
+  document.getElementById("editClose").addEventListener("click", () => closeSheet("editBackdrop"));
+  document.getElementById("editBackdrop").addEventListener("click", (e) => {
+    if (e.target.id === "editBackdrop") closeSheet("editBackdrop");
+  });
+
+  document.getElementById("editSave").addEventListener("click", () => {
+    if (!editingItemId) return;
+    const item = state.items.find((i) => i.id === editingItemId);
+    if (!item) return;
+
+    const newTitle = document.getElementById("edit_title").value.trim();
+    if (newTitle) item.title = newTitle;
+
+    const timeVal = document.getElementById("edit_time").value;
+    const naturalTime = deriveDefaultTimeHHMM(item.type, item.fields);
+    item.timeOverride = (timeVal && timeVal !== naturalTime) ? timeVal : null;
+
+    item.notes = document.getElementById("edit_notes").value.trim();
+
+    saveState();
+    closeSheet("editBackdrop");
+    renderPlan();
+    renderAllItemsList();
+    showToast("Saved");
+  });
+
+  document.getElementById("editDelete").addEventListener("click", () => {
+    if (!editingItemId) return;
+    if (!confirm("Remove this item from your trip?")) return;
+    state.items = state.items.filter((i) => i.id !== editingItemId);
+    saveState();
+    closeSheet("editBackdrop");
+    renderPlan();
+    renderAllItemsList();
+  });
+
+  document.getElementById("editFullForm").addEventListener("click", () => {
+    if (!editingItemId) return;
+    const id = editingItemId;
+    closeSheet("editBackdrop");
+    startEditItem(id);
+  });
+
   // ---------- PDF export ----------
   document.getElementById("exportBtn").addEventListener("click", exportPdf);
 
@@ -535,9 +753,9 @@
     let y = 60;
     const pageHeight = doc.internal.pageSize.getHeight();
     const pageWidth = doc.internal.pageSize.getWidth();
-    const navy = [27, 42, 61];
-    const brass = [192, 138, 62];
-    const muted = [91, 107, 122];
+    const forest = [22, 52, 42];
+    const lime = [124, 181, 84];
+    const muted = [107, 117, 104];
 
     function ensureSpace(need) {
       if (y + need > pageHeight - 50) {
@@ -547,9 +765,9 @@
     }
 
     // Title
-    doc.setFont("times", "bold");
+    doc.setFont("helvetica", "bold");
     doc.setFontSize(22);
-    doc.setTextColor(...navy);
+    doc.setTextColor(...forest);
     doc.text(state.trip.name || "Trip Itinerary", marginX, y);
     y += 22;
 
@@ -560,7 +778,7 @@
       doc.text(`${formatShortDate(state.trip.start)} \u2013 ${formatShortDate(state.trip.end)}`, marginX, y);
     }
     y += 10;
-    doc.setDrawColor(...brass);
+    doc.setDrawColor(...lime);
     doc.setLineWidth(1.5);
     doc.line(marginX, y, pageWidth - marginX, y);
     y += 26;
@@ -568,7 +786,7 @@
     const days = tripDays();
 
     if (days.length === 0) {
-      doc.setTextColor(...navy);
+      doc.setTextColor(...forest);
       doc.setFontSize(12);
       doc.text("No trip dates set yet.", marginX, y);
     }
@@ -576,9 +794,9 @@
     days.forEach((dateStr, idx) => {
       const dayItems = state.items.filter((i) => i.date === dateStr).sort((a, b) => a.order - b.order);
       ensureSpace(40);
-      doc.setFont("times", "bold");
+      doc.setFont("helvetica", "bold");
       doc.setFontSize(14);
-      doc.setTextColor(...navy);
+      doc.setTextColor(...forest);
       doc.text(`Day ${idx + 1} \u2014 ${formatDayLabel(dateStr)}`, marginX, y);
       y += 18;
 
@@ -594,7 +812,7 @@
           const time = stubTimeLabel(item);
           doc.setFont("helvetica", "bold");
           doc.setFontSize(11);
-          doc.setTextColor(...navy);
+          doc.setTextColor(...forest);
           const titleLine = (time ? `${time}  \u2013  ` : "") + `${TYPE_LABELS[item.type]}: ${item.title}`;
           doc.text(titleLine, marginX + 10, y);
           y += 14;
@@ -623,16 +841,16 @@
     const unscheduled = state.items.filter((i) => !i.date);
     if (unscheduled.length > 0) {
       ensureSpace(40);
-      doc.setFont("times", "bold");
+      doc.setFont("helvetica", "bold");
       doc.setFontSize(14);
-      doc.setTextColor(...navy);
+      doc.setTextColor(...forest);
       doc.text("Not yet scheduled", marginX, y);
       y += 18;
       unscheduled.forEach((item) => {
         ensureSpace(30);
         doc.setFont("helvetica", "bold");
         doc.setFontSize(11);
-        doc.setTextColor(...navy);
+        doc.setTextColor(...forest);
         doc.text(`${TYPE_LABELS[item.type]}: ${item.title}`, marginX + 10, y);
         y += 14;
         const meta = deriveMeta(item.type, item.fields);
