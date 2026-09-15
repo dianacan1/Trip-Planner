@@ -260,7 +260,7 @@
       setVal("s_conf", fields.confirmation);
     } else if (type === "activity") {
       setVal("a_title", fields.title); setVal("a_location", fields.location);
-      setVal("a_time", fields.time); setVal("a_category", fields.category || "sightseeing");
+      setVal("a_time", fields.time); setVal("a_category", fields.category || "eing");
     }
   }
 
