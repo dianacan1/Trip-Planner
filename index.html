@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Trip Planner</title>
+
+<link rel="manifest" href="manifest.json" />
+<meta name="theme-color" content="#1B2A3D" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Trips" />
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+<link rel="icon" href="icons/icon-192.png" />
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<div id="app">
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">&#9992;</span>
+      <span class="brand-name" id="tripNameDisplay">Trip Planner</span>
+    </div>
+    <button id="exportBtn" class="btn btn-brass btn-small" title="Export itinerary to PDF">Export PDF</button>
+  </header>
+
+  <main class="views">
+
+    <!-- ===================== TRIP TAB ===================== -->
+    <section class="view" id="view-trip" data-view="trip">
+      <h1 class="view-title">Your trip</h1>
+      <p class="view-sub">Name it and set the dates. This builds the day-by-day plan on the Plan tab.</p>
+
+      <form id="tripForm" class="card form-card">
+        <label class="field">
+          <span>Trip name</span>
+          <input type="text" id="tripName" placeholder="e.g. Portugal &amp; Spain" required />
+        </label>
+
+        <div class="field-row">
+          <label class="field">
+            <span>Start date</span>
+            <input type="date" id="tripStart" required />
+          </label>
+          <label class="field">
+            <span>End date</span>
+            <input type="date" id="tripEnd" required />
+          </label>
+        </div>
+
+        <button type="submit" class="btn btn-navy">Save trip</button>
+      </form>
+
+      <div class="card trip-summary" id="tripSummary" hidden>
+        <p><strong id="summaryDates"></strong></p>
+        <p class="muted" id="summaryDayCount"></p>
+      </div>
+
+      <div class="empty-hint" id="dataResetHint">
+        <button id="resetAllBtn" class="btn-link danger">Clear all trip data on this device</button>
+      </div>
+    </section>
+
+    <!-- ===================== ADD TAB ===================== -->
+    <section class="view" id="view-add" data-view="add">
+      <h1 class="view-title">Add to your trip</h1>
+
+      <div class="segmented" id="typeSegmented" role="tablist" aria-label="Item type">
+        <button class="seg-btn active" data-type="flight" role="tab" aria-selected="true">Flight</button>
+        <button class="seg-btn" data-type="car" role="tab" aria-selected="false">Car</button>
+        <button class="seg-btn" data-type="stay" role="tab" aria-selected="false">Stay</button>
+        <button class="seg-btn" data-type="activity" role="tab" aria-selected="false">Activity</button>
+      </div>
+
+      <form id="itemForm" class="card form-card">
+        <input type="hidden" id="itemId" />
+        <input type="hidden" id="itemType" value="flight" />
+
+        <!-- Flight fields -->
+        <div class="type-fields" data-fields="flight">
+          <div class="field-row">
+            <label class="field"><span>Airline</span><input type="text" id="f_airline" placeholder="Delta" /></label>
+            <label class="field"><span>Flight #</span><input type="text" id="f_number" placeholder="DL 123" /></label>
+          </div>
+          <div class="field-row">
+            <label class="field"><span>From</span><input type="text" id="f_from" placeholder="DFW" /></label>
+            <label class="field"><span>To</span><input type="text" id="f_to" placeholder="LIS" /></label>
+          </div>
+          <div class="field-row">
+            <label class="field"><span>Departs</span><input type="datetime-local" id="f_depart" /></label>
+            <label class="field"><span>Arrives</span><input type="datetime-local" id="f_arrive" /></label>
+          </div>
+          <label class="field"><span>Confirmation #</span><input type="text" id="f_conf" /></label>
+        </div>
+
+        <!-- Car fields -->
+        <div class="type-fields" data-fields="car" hidden>
+          <label class="field"><span>Rental company</span><input type="text" id="c_company" placeholder="Hertz" /></label>
+          <div class="field-row">
+            <label class="field"><span>Pick-up location</span><input type="text" id="c_pickupLoc" /></label>
+            <label class="field"><span>Pick-up time</span><input type="datetime-local" id="c_pickupTime" /></label>
+          </div>
+          <div class="field-row">
+            <label class="field"><span>Drop-off location</span><input type="text" id="c_dropoffLoc" /></label>
+            <label class="field"><span>Drop-off time</span><input type="datetime-local" id="c_dropoffTime" /></label>
+          </div>
+          <label class="field"><span>Confirmation #</span><input type="text" id="c_conf" /></label>
+        </div>
+
+        <!-- Stay fields -->
+        <div class="type-fields" data-fields="stay" hidden>
+          <label class="field"><span>Hotel / stay name</span><input type="text" id="s_name" /></label>
+          <label class="field"><span>Address</span><input type="text" id="s_address" /></label>
+          <div class="field-row">
+            <label class="field"><span>Check-in</span><input type="datetime-local" id="s_checkin" /></label>
+            <label class="field"><span>Check-out</span><input type="datetime-local" id="s_checkout" /></label>
+          </div>
+          <label class="field"><span>Confirmation #</span><input type="text" id="s_conf" /></label>
+        </div>
+
+        <!-- Activity fields -->
+        <div class="type-fields" data-fields="activity" hidden>
+          <label class="field"><span>Name</span><input type="text" id="a_title" placeholder="Belém Tower" /></label>
+          <label class="field"><span>Location</span><input type="text" id="a_location" /></label>
+          <div class="field-row">
+            <label class="field"><span>Time</span><input type="time" id="a_time" /></label>
+            <label class="field"><span>Category</span>
+              <select id="a_category">
+                <option value="sightseeing">Sightseeing</option>
+                <option value="food">Food &amp; drink</option>
+                <option value="outdoors">Outdoors</option>
+                <option value="shopping">Shopping</option>
+                <option value="other">Other</option>
+              </select>
+            </label>
+          </div>
+        </div>
+
+        <label class="field">
+          <span>Notes</span>
+          <textarea id="itemNotes" rows="2" placeholder="Optional details"></textarea>
+        </label>
+
+        <div class="form-actions">
+          <button type="submit" class="btn btn-navy" id="itemSubmitBtn">Add to trip</button>
+          <button type="button" class="btn-link" id="itemCancelEdit" hidden>Cancel edit</button>
+        </div>
+      </form>
+
+      <h2 class="list-heading">Everything you've added</h2>
+      <div id="allItemsList" class="item-list"></div>
+    </section>
+
+    <!-- ===================== PLAN TAB ===================== -->
+    <section class="view" id="view-plan" data-view="plan">
+      <h1 class="view-title">Plan your days</h1>
+      <p class="view-sub">Drag items from the tray onto a day, or between days, to build the itinerary.</p>
+
+      <div class="unassigned-tray">
+        <div class="tray-label">Not yet scheduled</div>
+        <div id="unassignedList" class="drop-zone tray-zone" data-date=""></div>
+      </div>
+
+      <div id="daysContainer" class="days-container"></div>
+
+      <div id="noTripMessage" class="empty-hint" hidden>
+        <p>Set your trip dates on the <strong>Trip</strong> tab first — your days will show up here.</p>
+      </div>
+    </section>
+
+  </main>
+
+  <nav class="tabbar" aria-label="Sections">
+    <button class="tab-btn active" data-view="trip">
+      <span class="tab-icon" aria-hidden="true">&#128197;</span><span>Trip</span>
+    </button>
+    <button class="tab-btn" data-view="add">
+      <span class="tab-icon" aria-hidden="true">&#43;</span><span>Add</span>
+    </button>
+    <button class="tab-btn" data-view="plan">
+      <span class="tab-icon" aria-hidden="true">&#128506;&#65039;</span><span>Plan</span>
+    </button>
+  </nav>
+
+</div>
+
+<div id="toast" class="toast" hidden></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.2/Sortable.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
