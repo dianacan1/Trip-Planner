@@ -3,7 +3,7 @@
 
   const STORAGE_KEY = "trip-planner-data-v1";
 
-  const TYPE_LABELS = { flight: "Flight", car: "Car", stay: "Stay", activity: "Activity" };
+  const TYPE_LABELS = { flight: "Flight", car: "Car", stay: "Housing", activity: "Activity" };
   const TYPE_ICONS = { flight: "\u2708\uFE0F", car: "\uD83D\uDE97", stay: "\uD83C\uDFE8", activity: "\uD83D\uDCCD" };
 
   // ---------- State ----------
