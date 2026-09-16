@@ -48,8 +48,8 @@
         <label class="field">
           <span>Trip dates</span>
           <button type="button" class="date-trigger" id="dateTrigger">
-            <span class="dt-value placeholder" id="dateTriggerLabel">Choose your dates</span>
             <span class="dt-icon" aria-hidden="true">&#128197;</span>
+            <span class="dt-value placeholder" id="dateTriggerLabel">Choose your dates</span>
           </button>
           <input type="hidden" id="tripStart" required />
           <input type="hidden" id="tripEnd" required />
@@ -110,8 +110,14 @@
             </label>
           </div>
           <div class="field-row">
-            <label class="field"><span>Departs</span><input type="datetime-local" id="f_depart" /></label>
-            <label class="field"><span>Arrives</span><input type="datetime-local" id="f_arrive" /></label>
+            <label class="field">
+              <span>Departs</span>
+              <div class="dtfield" data-mount="f_depart" data-label="Departure"></div>
+            </label>
+            <label class="field">
+              <span>Arrives</span>
+              <div class="dtfield" data-mount="f_arrive" data-label="Arrival"></div>
+            </label>
           </div>
           <label class="field"><span>Confirmation #</span><input type="text" id="f_conf" /></label>
         </div>
@@ -129,7 +135,7 @@
               <div class="geo-status" id="c_pickupLoc_status"></div>
               <div class="geo-results" id="c_pickupLoc_results" hidden></div>
             </label>
-            <label class="field"><span>Pick-up time</span><input type="datetime-local" id="c_pickupTime" /></label>
+            <label class="field"><span>Pick-up time</span><div class="dtfield" data-mount="c_pickupTime" data-label="Pick-up"></div></label>
           </div>
           <div class="field-row">
             <label class="field">
@@ -141,7 +147,7 @@
               <div class="geo-status" id="c_dropoffLoc_status"></div>
               <div class="geo-results" id="c_dropoffLoc_results" hidden></div>
             </label>
-            <label class="field"><span>Drop-off time</span><input type="datetime-local" id="c_dropoffTime" /></label>
+            <label class="field"><span>Drop-off time</span><div class="dtfield" data-mount="c_dropoffTime" data-label="Drop-off"></div></label>
           </div>
           <label class="field"><span>Confirmation #</span><input type="text" id="c_conf" /></label>
         </div>
@@ -159,8 +165,8 @@
             <div class="geo-results" id="s_address_results" hidden></div>
           </label>
           <div class="field-row">
-            <label class="field"><span>Check-in</span><input type="datetime-local" id="s_checkin" /></label>
-            <label class="field"><span>Check-out</span><input type="datetime-local" id="s_checkout" /></label>
+            <label class="field"><span>Check-in</span><div class="dtfield" data-mount="s_checkin" data-label="Check-in"></div></label>
+            <label class="field"><span>Check-out</span><div class="dtfield" data-mount="s_checkout" data-label="Check-out"></div></label>
           </div>
           <label class="field"><span>Confirmation #</span><input type="text" id="s_conf" /></label>
         </div>
@@ -178,7 +184,7 @@
             <div class="geo-results" id="a_location_results" hidden></div>
           </label>
           <div class="field-row">
-            <label class="field"><span>Time</span><input type="time" id="a_time" /></label>
+            <label class="field"><span>Time</span><div class="dtfield" data-mount="a_time" data-label="Time" data-kind="time"></div></label>
             <label class="field"><span>Category</span>
               <select id="a_category">
                 <option value="Place">Place</option>
@@ -268,29 +274,54 @@
 
 <!-- ===================== CALENDAR SHEET ===================== -->
 <div class="sheet-backdrop" id="calBackdrop" hidden>
-  <div class="sheet" id="calSheet">
+  <div class="sheet cal-sheet" id="calSheet">
     <div class="sheet-grabber"></div>
     <div class="sheet-header">
-      <span class="sheet-title">Trip dates</span>
+      <span class="sheet-title" id="calSheetTitle">Trip dates</span>
       <button type="button" class="sheet-close" id="calClose" aria-label="Close">&#10005;</button>
-    </div>
-
-    <div class="cal-nav">
-      <button type="button" class="cal-nav-btn" id="calPrev" aria-label="Previous month">&#8249;</button>
-      <span class="cal-month-label" id="calMonthLabel"></span>
-      <button type="button" class="cal-nav-btn" id="calNext" aria-label="Next month">&#8250;</button>
     </div>
 
     <div class="cal-weekdays">
       <span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span>
     </div>
-    <div class="cal-grid" id="calGrid"></div>
+
+    <div class="cal-scroll-area" id="calScrollArea"></div>
 
     <p class="cal-hint" id="calHint">Tap a start date, then an end date.</p>
 
-    <div class="sheet-actions">
+    <div class="sheet-actions" id="calFooterRange">
       <button type="button" class="btn btn-ghost" id="calClear">Clear</button>
       <button type="button" class="btn btn-navy" id="calDone">Done</button>
+    </div>
+    <div class="sheet-actions" id="calFooterSingle" hidden>
+      <button type="button" class="btn btn-ghost" id="calClearSingle">Clear date</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== TIME SHEET ===================== -->
+<div class="sheet-backdrop" id="timeBackdrop" hidden>
+  <div class="sheet time-sheet" id="timeSheetEl">
+    <div class="sheet-grabber"></div>
+    <div class="sheet-header">
+      <span class="sheet-title" id="timeSheetTitle">Set time</span>
+      <button type="button" class="sheet-close" id="timeClose" aria-label="Close">&#10005;</button>
+    </div>
+
+    <div class="wheel-picker">
+      <div class="wheel-highlight"></div>
+      <div class="wheel-col" id="wheelHour"></div>
+      <div class="wheel-sep">:</div>
+      <div class="wheel-col" id="wheelMinute"></div>
+      <div class="wheel-period">
+        <button type="button" class="period-btn" data-period="AM">AM</button>
+        <button type="button" class="period-btn" data-period="PM">PM</button>
+      </div>
+    </div>
+
+    <div class="sheet-actions">
+      <button type="button" class="btn btn-ghost" id="timeClear">Clear</button>
+      <button type="button" class="btn btn-navy" id="timeDone">Done</button>
     </div>
   </div>
 </div>
@@ -311,7 +342,7 @@
 
     <label class="field">
       <span>Time on this day</span>
-      <input type="time" id="edit_time" />
+      <div class="dtfield" data-mount="edit_time" data-label="Time" data-kind="time"></div>
     </label>
 
     <label class="field">

@@ -81,10 +81,12 @@ regularly is a good way to keep a durable copy.
   address, activity location) has a **Find** button — type a real address
   or place name and tap it to look it up; if there's more than one match
   you'll get a short list to pick the right one from. That's what puts the
-  pin on the Map tab. Everything you add lands in "Not yet scheduled" until
-  you place it on a day. (Flights, cars, and stays with a date/time will
-  actually auto-place themselves on the matching day — you can still drag
-  them elsewhere.)
+  pin on the Map tab. Date and time fields are separate pill buttons — tap
+  the date pill for a scrollable calendar (it opens already scrolled to
+  your trip's month) and the time pill for a scroll-wheel time picker.
+  Everything you add lands in "Not yet scheduled" until you place it on a
+  day. (Flights, cars, and stays with a date/time will actually auto-place
+  themselves on the matching day — you can still drag them elsewhere.)
 - **Plan tab** — drag cards between the tray and any day, and reorder within
   a day, to build the itinerary. Tap a card to edit its title, notes, and
   time right there. Tap **Export PDF** in the top bar any time to download a

@@ -310,37 +310,59 @@
     }
   });
 
-  // ---------- Calendar range picker ----------
-  let calViewMonth = new Date(); // first-of-month being displayed
-  let calTempStart = null; // "YYYY-MM-DD" or null
+  // ---------- Calendar sheet (scrollable multi-month, range or single mode) ----------
+  let calMode = "range"; // "range" | "single"
+  let calTempStart = null; // "YYYY-MM-DD" or null (range mode)
   let calTempEnd = null;
+  let calSingleValue = null; // "YYYY-MM-DD" or null (single mode)
+  let calSingleCallback = null;
+
+  const calSheetTitleEl = document.getElementById("calSheetTitle");
+  const calFooterRange = document.getElementById("calFooterRange");
+  const calFooterSingle = document.getElementById("calFooterSingle");
+  const calHintEl = document.getElementById("calHint");
 
   dateTrigger.addEventListener("click", () => {
+    openCalendarRange();
+  });
+
+  function openCalendarRange() {
+    calMode = "range";
     calTempStart = tripStartInput.value || null;
     calTempEnd = tripEndInput.value || null;
-    calViewMonth = calTempStart ? startOfMonth(parseDateOnly(calTempStart)) : startOfMonth(new Date());
-    renderCalendar();
+    calSheetTitleEl.textContent = "Trip dates";
+    calFooterRange.hidden = false;
+    calFooterSingle.hidden = true;
+    calHintEl.hidden = false;
+    buildCalendarMonths(calTempStart || todayISO());
+    updateCalHint();
     openSheet("calBackdrop");
-  });
+  }
+
+  function openCalendarSingle(currentValue, hintValue, title, onSelect) {
+    calMode = "single";
+    calSingleValue = currentValue || null;
+    calSingleCallback = onSelect;
+    calSheetTitleEl.textContent = title || "Choose a date";
+    calFooterRange.hidden = true;
+    calFooterSingle.hidden = false;
+    calHintEl.hidden = true;
+    buildCalendarMonths(hintValue || currentValue || todayISO());
+    openSheet("calBackdrop");
+  }
+
+  function todayISO() { return isoDate(new Date()); }
 
   document.getElementById("calClose").addEventListener("click", () => closeSheet("calBackdrop"));
   document.getElementById("calBackdrop").addEventListener("click", (e) => {
     if (e.target.id === "calBackdrop") closeSheet("calBackdrop");
   });
 
-  document.getElementById("calPrev").addEventListener("click", () => {
-    calViewMonth = addMonths(calViewMonth, -1);
-    renderCalendar();
-  });
-  document.getElementById("calNext").addEventListener("click", () => {
-    calViewMonth = addMonths(calViewMonth, 1);
-    renderCalendar();
-  });
-
   document.getElementById("calClear").addEventListener("click", () => {
     calTempStart = null;
     calTempEnd = null;
-    renderCalendar();
+    refreshDayClasses();
+    updateCalHint();
   });
 
   document.getElementById("calDone").addEventListener("click", () => {
@@ -353,22 +375,30 @@
     closeSheet("calBackdrop");
   });
 
+  document.getElementById("calClearSingle").addEventListener("click", () => {
+    calSingleValue = null;
+    if (calSingleCallback) calSingleCallback(null);
+    closeSheet("calBackdrop");
+  });
+
   function startOfMonth(d) { return new Date(d.getFullYear(), d.getMonth(), 1); }
   function addMonths(d, n) { return new Date(d.getFullYear(), d.getMonth() + n, 1); }
 
-  function renderCalendar() {
-    const label = calViewMonth.toLocaleDateString(undefined, { month: "long", year: "numeric" });
-    document.getElementById("calMonthLabel").textContent = label;
+  function buildMonthCard(year, month) {
+    const card = document.createElement("div");
+    card.className = "cal-month-card";
 
-    const grid = document.getElementById("calGrid");
-    grid.innerHTML = "";
+    const label = document.createElement("div");
+    label.className = "cal-month-card-label";
+    label.textContent = new Date(year, month, 1).toLocaleDateString(undefined, { month: "long", year: "numeric" });
+    card.appendChild(label);
 
-    const year = calViewMonth.getFullYear();
-    const month = calViewMonth.getMonth();
+    const grid = document.createElement("div");
+    grid.className = "cal-grid";
+
     const firstWeekday = new Date(year, month, 1).getDay();
     const daysInMonth = new Date(year, month + 1, 0).getDate();
     const daysInPrevMonth = new Date(year, month, 0).getDate();
-    const todayStr = isoDate(new Date());
 
     const cells = [];
     for (let i = firstWeekday - 1; i >= 0; i--) {
@@ -378,7 +408,7 @@
       cells.push({ day: d, otherMonth: false, dateStr: isoDate(new Date(year, month, d)) });
     }
     while (cells.length % 7 !== 0) {
-      cells.push({ day: cells.length, otherMonth: true });
+      cells.push({ day: "", otherMonth: true });
     }
 
     cells.forEach((cell) => {
@@ -386,43 +416,318 @@
       btn.type = "button";
       btn.className = "cal-day";
       btn.textContent = cell.day;
-
       if (cell.otherMonth) {
         btn.classList.add("other-month");
         btn.disabled = true;
       } else {
-        if (cell.dateStr === todayStr) btn.classList.add("today");
-        if (calTempStart && cell.dateStr === calTempStart) btn.classList.add("range-start");
-        if (calTempEnd && cell.dateStr === calTempEnd) btn.classList.add("range-end");
-        if (calTempStart && calTempEnd && cell.dateStr > calTempStart && cell.dateStr < calTempEnd) {
-          btn.classList.add("in-range");
-        }
+        btn.dataset.date = cell.dateStr;
         btn.addEventListener("click", () => onCalDayClick(cell.dateStr));
       }
       grid.appendChild(btn);
     });
 
-    const hint = document.getElementById("calHint");
+    card.appendChild(grid);
+    return card;
+  }
+
+  function buildCalendarMonths(hintDateStr) {
+    const hint = parseDateOnly(hintDateStr);
+    const rangeStart = addMonths(startOfMonth(hint), -3);
+    const scrollArea = document.getElementById("calScrollArea");
+    scrollArea.innerHTML = "";
+
+    let hintCard = null;
+    for (let i = 0; i < 19; i++) {
+      const d = addMonths(rangeStart, i);
+      const card = buildMonthCard(d.getFullYear(), d.getMonth());
+      if (d.getFullYear() === hint.getFullYear() && d.getMonth() === hint.getMonth()) hintCard = card;
+      scrollArea.appendChild(card);
+    }
+
+    refreshDayClasses();
+    requestAnimationFrame(() => {
+      if (hintCard) hintCard.scrollIntoView({ block: "start" });
+    });
+  }
+
+  function refreshDayClasses() {
+    const today = todayISO();
+    document.querySelectorAll("#calScrollArea .cal-day[data-date]").forEach((btn) => {
+      const ds = btn.dataset.date;
+      btn.classList.toggle("today", ds === today);
+      if (calMode === "range") {
+        btn.classList.toggle("range-start", calTempStart === ds);
+        btn.classList.toggle("range-end", calTempEnd === ds);
+        btn.classList.toggle("in-range", !!(calTempStart && calTempEnd && ds > calTempStart && ds < calTempEnd));
+      } else {
+        btn.classList.toggle("range-start", calSingleValue === ds);
+        btn.classList.remove("range-end", "in-range");
+      }
+    });
+  }
+
+  function updateCalHint() {
+    if (calMode !== "range") return;
     if (calTempStart && calTempEnd) {
-      hint.textContent = `${formatShortDate(calTempStart)} \u2013 ${formatShortDate(calTempEnd)}`;
+      calHintEl.textContent = `${formatShortDate(calTempStart)} \u2013 ${formatShortDate(calTempEnd)}`;
     } else if (calTempStart) {
-      hint.textContent = "Now tap an end date.";
+      calHintEl.textContent = "Now tap an end date.";
     } else {
-      hint.textContent = "Tap a start date, then an end date.";
+      calHintEl.textContent = "Tap a start date, then an end date.";
     }
   }
 
   function onCalDayClick(dateStr) {
-    if (!calTempStart || (calTempStart && calTempEnd)) {
-      calTempStart = dateStr;
-      calTempEnd = null;
-    } else if (dateStr < calTempStart) {
-      calTempStart = dateStr;
+    if (calMode === "range") {
+      if (!calTempStart || (calTempStart && calTempEnd)) {
+        calTempStart = dateStr;
+        calTempEnd = null;
+      } else if (dateStr < calTempStart) {
+        calTempStart = dateStr;
+      } else {
+        calTempEnd = dateStr;
+      }
+      refreshDayClasses();
+      updateCalHint();
     } else {
-      calTempEnd = dateStr;
+      calSingleValue = dateStr;
+      refreshDayClasses();
+      if (calSingleCallback) calSingleCallback(dateStr);
+      closeSheet("calBackdrop");
     }
-    renderCalendar();
   }
+
+  // ---------- Time sheet (wheel picker) ----------
+  const WHEEL_ITEM_H = 44;
+  let timeSheetCallback = null;
+  let timeSelHour = 12, timeSelMinute = 0, timeSelPeriod = "AM";
+
+  function openTimeSheet(currentHHMM, title, onDone) {
+    timeSheetCallback = onDone;
+    document.getElementById("timeSheetTitle").textContent = title || "Set time";
+
+    let h24, m;
+    if (currentHHMM) {
+      const [hh, mm] = currentHHMM.split(":").map(Number);
+      h24 = hh; m = mm;
+    } else {
+      const now = new Date();
+      h24 = now.getHours();
+      m = Math.round(now.getMinutes() / 5) * 5 % 60;
+    }
+    timeSelPeriod = h24 >= 12 ? "PM" : "AM";
+    timeSelHour = h24 % 12; if (timeSelHour === 0) timeSelHour = 12;
+    timeSelMinute = Math.round(m / 5) * 5 % 60;
+
+    buildWheel("wheelHour", Array.from({ length: 12 }, (_, i) => ({ value: i + 1, label: String(i + 1) })), timeSelHour, (v) => { timeSelHour = v; });
+    buildWheel("wheelMinute", Array.from({ length: 12 }, (_, i) => ({ value: i * 5, label: String(i * 5).padStart(2, "0") })), timeSelMinute, (v) => { timeSelMinute = v; });
+    updatePeriodButtons();
+
+    openSheet("timeBackdrop");
+  }
+
+  function updatePeriodButtons() {
+    document.querySelectorAll(".period-btn").forEach((b) => {
+      b.classList.toggle("active", b.dataset.period === timeSelPeriod);
+    });
+  }
+  document.querySelectorAll(".period-btn").forEach((b) => {
+    b.addEventListener("click", () => { timeSelPeriod = b.dataset.period; updatePeriodButtons(); });
+  });
+
+  document.getElementById("timeClose").addEventListener("click", () => closeSheet("timeBackdrop"));
+  document.getElementById("timeBackdrop").addEventListener("click", (e) => {
+    if (e.target.id === "timeBackdrop") closeSheet("timeBackdrop");
+  });
+
+  document.getElementById("timeClear").addEventListener("click", () => {
+    if (timeSheetCallback) timeSheetCallback("");
+    closeSheet("timeBackdrop");
+  });
+
+  document.getElementById("timeDone").addEventListener("click", () => {
+    const val = to24Hour(timeSelHour, timeSelMinute, timeSelPeriod);
+    if (timeSheetCallback) timeSheetCallback(val);
+    closeSheet("timeBackdrop");
+  });
+
+  function to24Hour(hour12, minute, period) {
+    let h = hour12 % 12;
+    if (period === "PM") h += 12;
+    return String(h).padStart(2, "0") + ":" + String(minute).padStart(2, "0");
+  }
+
+  function buildWheel(colId, items, selectedValue, onChange) {
+    const col = document.getElementById(colId);
+    col.innerHTML = "";
+    col.style.paddingTop = ((220 - WHEEL_ITEM_H) / 2) + "px";
+    col.style.paddingBottom = ((220 - WHEEL_ITEM_H) / 2) + "px";
+
+    items.forEach((it) => {
+      const div = document.createElement("div");
+      div.className = "wheel-item";
+      div.textContent = it.label;
+      div.dataset.value = it.value;
+      col.appendChild(div);
+    });
+
+    const selIndex = items.findIndex((it) => it.value === selectedValue);
+    const idx = selIndex >= 0 ? selIndex : 0;
+
+    function highlight(index) {
+      Array.from(col.children).forEach((el, i) => el.classList.toggle("selected", i === index));
+    }
+
+    let scrollTimeout = null;
+    function settle() {
+      const index = Math.max(0, Math.min(items.length - 1, Math.round(col.scrollTop / WHEEL_ITEM_H)));
+      col.scrollTo({ top: index * WHEEL_ITEM_H, behavior: "smooth" });
+      highlight(index);
+      onChange(items[index].value);
+    }
+    col.addEventListener("scroll", () => {
+      clearTimeout(scrollTimeout);
+      scrollTimeout = setTimeout(settle, 110);
+    });
+
+    requestAnimationFrame(() => {
+      col.scrollTop = idx * WHEEL_ITEM_H;
+      highlight(idx);
+    });
+  }
+
+  // ---------- Date/time pill field mounting ----------
+  const DATETIME_FIELD_REGISTRY = {};
+  const TIME_FIELD_REGISTRY = {};
+
+  function mountDateTimeField(container, hiddenId, label) {
+    const hidden = document.createElement("input");
+    hidden.type = "hidden";
+    hidden.id = hiddenId;
+
+    const row = document.createElement("div");
+    row.className = "dtfield-row";
+
+    const datePill = document.createElement("button");
+    datePill.type = "button";
+    datePill.className = "pill-trigger";
+    datePill.innerHTML = `<span class="pill-icon">\u{1F4C5}</span><span class="pill-text">Date</span>`;
+
+    const timePill = document.createElement("button");
+    timePill.type = "button";
+    timePill.className = "pill-trigger";
+    timePill.innerHTML = `<span class="pill-icon">\u{1F550}</span><span class="pill-text">Time</span>`;
+
+    function recompose() {
+      const d = hidden.dataset.datePart;
+      const t = hidden.dataset.timePart;
+      hidden.value = d ? `${d}T${t || "00:00"}` : "";
+    }
+
+    datePill.addEventListener("click", () => {
+      const hintSrc = tripStartInput.value || hidden.dataset.datePart || null;
+      openCalendarSingle(hidden.dataset.datePart || null, hintSrc, `${label} \u2014 date`, (dateStr) => {
+        if (dateStr) {
+          hidden.dataset.datePart = dateStr;
+          datePill.querySelector(".pill-text").textContent = formatShortDate(dateStr);
+          datePill.classList.add("filled");
+        } else {
+          delete hidden.dataset.datePart;
+          datePill.querySelector(".pill-text").textContent = "Date";
+          datePill.classList.remove("filled");
+        }
+        recompose();
+      });
+    });
+
+    timePill.addEventListener("click", () => {
+      openTimeSheet(hidden.dataset.timePart || "", `${label} \u2014 time`, (val) => {
+        if (val) {
+          hidden.dataset.timePart = val;
+          timePill.querySelector(".pill-text").textContent = formatHHMM(val);
+          timePill.classList.add("filled");
+        } else {
+          delete hidden.dataset.timePart;
+          timePill.querySelector(".pill-text").textContent = "Time";
+          timePill.classList.remove("filled");
+        }
+        recompose();
+      });
+    });
+
+    row.appendChild(datePill);
+    row.appendChild(timePill);
+    container.appendChild(hidden);
+    container.appendChild(row);
+    DATETIME_FIELD_REGISTRY[hiddenId] = { datePill, timePill, hidden, recompose };
+  }
+
+  function mountTimeOnlyField(container, hiddenId, label) {
+    const hidden = document.createElement("input");
+    hidden.type = "hidden";
+    hidden.id = hiddenId;
+
+    const pill = document.createElement("button");
+    pill.type = "button";
+    pill.className = "pill-trigger pill-full";
+    pill.innerHTML = `<span class="pill-icon">\u{1F550}</span><span class="pill-text">Set time</span>`;
+    pill.addEventListener("click", () => {
+      openTimeSheet(hidden.value || "", label, (val) => {
+        hidden.value = val || "";
+        updateTimePillLabel(pill, val);
+      });
+    });
+
+    container.appendChild(hidden);
+    container.appendChild(pill);
+    TIME_FIELD_REGISTRY[hiddenId] = { pill, hidden };
+  }
+
+  function updateTimePillLabel(pill, hhmm) {
+    const textEl = pill.querySelector(".pill-text");
+    if (hhmm) { textEl.textContent = formatHHMM(hhmm); pill.classList.add("filled"); }
+    else { textEl.textContent = "Set time"; pill.classList.remove("filled"); }
+  }
+
+  function setDateTimeFieldValue(hiddenId, value) {
+    const reg = DATETIME_FIELD_REGISTRY[hiddenId];
+    if (!reg) return;
+    if (value) {
+      const [d, t] = value.split("T");
+      reg.hidden.dataset.datePart = d;
+      reg.datePill.querySelector(".pill-text").textContent = formatShortDate(d);
+      reg.datePill.classList.add("filled");
+      if (t) {
+        const hhmm = t.slice(0, 5);
+        reg.hidden.dataset.timePart = hhmm;
+        reg.timePill.querySelector(".pill-text").textContent = formatHHMM(hhmm);
+        reg.timePill.classList.add("filled");
+      }
+    } else {
+      delete reg.hidden.dataset.datePart;
+      delete reg.hidden.dataset.timePart;
+      reg.datePill.querySelector(".pill-text").textContent = "Date";
+      reg.datePill.classList.remove("filled");
+      reg.timePill.querySelector(".pill-text").textContent = "Time";
+      reg.timePill.classList.remove("filled");
+    }
+    reg.recompose();
+  }
+
+  function setTimeOnlyFieldValue(hiddenId, value) {
+    const reg = TIME_FIELD_REGISTRY[hiddenId];
+    if (!reg) return;
+    reg.hidden.value = value || "";
+    updateTimePillLabel(reg.pill, value);
+  }
+
+  document.querySelectorAll(".dtfield").forEach((el) => {
+    const id = el.dataset.mount;
+    const label = el.dataset.label || "";
+    const kind = el.dataset.kind || "datetime";
+    if (kind === "time") mountTimeOnlyField(el, id, label);
+    else mountDateTimeField(el, id, label);
+  });
 
   // ---------- Add-item form ----------
   const segmented = document.getElementById("typeSegmented");
@@ -454,6 +759,8 @@
     itemForm.reset();
     itemIdInput.value = "";
     GEO_FIELDS.forEach(clearGeoField);
+    Object.keys(DATETIME_FIELD_REGISTRY).forEach((id) => setDateTimeFieldValue(id, null));
+    Object.keys(TIME_FIELD_REGISTRY).forEach((id) => { if (id !== "edit_time") setTimeOnlyFieldValue(id, null); });
     setActiveType(itemTypeInput.value || "flight");
     itemSubmitBtn.textContent = "Add to trip";
     itemCancelEdit.hidden = true;
@@ -519,24 +826,24 @@
       setVal("f_from", fields.from); setVal("f_to", fields.to);
       restoreGeoField("f_from", fields.fromLat, fields.fromLon);
       restoreGeoField("f_to", fields.toLat, fields.toLon);
-      setVal("f_depart", fields.depart); setVal("f_arrive", fields.arrive);
+      setDateTimeFieldValue("f_depart", fields.depart); setDateTimeFieldValue("f_arrive", fields.arrive);
       setVal("f_conf", fields.confirmation);
     } else if (type === "car") {
       setVal("c_company", fields.company);
       setVal("c_pickupLoc", fields.pickupLoc); restoreGeoField("c_pickupLoc", fields.pickupLat, fields.pickupLon);
-      setVal("c_pickupTime", fields.pickupTime);
+      setDateTimeFieldValue("c_pickupTime", fields.pickupTime);
       setVal("c_dropoffLoc", fields.dropoffLoc); restoreGeoField("c_dropoffLoc", fields.dropoffLat, fields.dropoffLon);
-      setVal("c_dropoffTime", fields.dropoffTime);
+      setDateTimeFieldValue("c_dropoffTime", fields.dropoffTime);
       setVal("c_conf", fields.confirmation);
     } else if (type === "stay") {
       setVal("s_name", fields.name);
       setVal("s_address", fields.address); restoreGeoField("s_address", fields.lat, fields.lon);
-      setVal("s_checkin", fields.checkin); setVal("s_checkout", fields.checkout);
+      setDateTimeFieldValue("s_checkin", fields.checkin); setDateTimeFieldValue("s_checkout", fields.checkout);
       setVal("s_conf", fields.confirmation);
     } else if (type === "activity") {
       setVal("a_title", fields.title);
       setVal("a_location", fields.location); restoreGeoField("a_location", fields.lat, fields.lon);
-      setVal("a_time", fields.time); setVal("a_category", fields.category || "Place");
+      setTimeOnlyFieldValue("a_time", fields.time); setVal("a_category", fields.category || "Place");
     }
   }
 
@@ -821,7 +1128,7 @@
     document.getElementById("editSheetTitle").textContent = `Edit ${TYPE_LABELS[item.type].toLowerCase()}`;
     document.getElementById("edit_title").value = item.title || "";
     const timeVal = item.timeOverride || deriveDefaultTimeHHMM(item.type, item.fields);
-    document.getElementById("edit_time").value = timeVal || "";
+    setTimeOnlyFieldValue("edit_time", timeVal || "");
     document.getElementById("edit_notes").value = item.notes || "";
     openSheet("editBackdrop");
   }
