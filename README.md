@@ -74,16 +74,37 @@ regularly is a good way to keep a durable copy.
 
 ## Using it
 
-- **Trip tab** — name your trip and set start/end dates. This is what
-  generates the day-by-day structure on the Plan tab.
+- **Trip tab** — name your trip and set start/end dates using the calendar.
+  This is what generates the day-by-day structure on the Plan tab.
 - **Add tab** — switch between Flight / Car / Stay / Activity and fill in
-  details. Everything you add lands in "Not yet scheduled" until you place
-  it on a day. (Flights, cars, and stays with a date/time will actually
-  auto-place themselves on the matching day — you can still drag them
-  elsewhere.)
+  details. Any location field (flight from/to, car pick-up/drop-off, stay
+  address, activity location) has a **Find** button — type a real address
+  or place name and tap it to look it up; if there's more than one match
+  you'll get a short list to pick the right one from. That's what puts the
+  pin on the Map tab. Everything you add lands in "Not yet scheduled" until
+  you place it on a day. (Flights, cars, and stays with a date/time will
+  actually auto-place themselves on the matching day — you can still drag
+  them elsewhere.)
 - **Plan tab** — drag cards between the tray and any day, and reorder within
-  a day, to build the itinerary. Tap **Export PDF** in the top bar any time
-  to download a formatted itinerary.
+  a day, to build the itinerary. Tap a card to edit its title, notes, and
+  time right there. Tap **Export PDF** in the top bar any time to download a
+  formatted itinerary.
+- **Map tab** — every flight, car, stay, and activity you've looked up an
+  address for shows up as a pin here, color-coded by type. Use the dropdown
+  to filter to a single day. Tap a pin for details.
+
+### About the address lookup and map
+
+Both run on free, no-account services — [OpenStreetMap Nominatim](https://nominatim.org/)
+for turning an address into map coordinates, and OpenStreetMap tiles for the
+map itself. No API key, nothing to configure. Two things worth knowing:
+
+- It works best with fairly complete addresses or well-known place names
+  ("Belém Tower, Lisbon" beats just "tower"). Airport codes alone (like
+  "DFW") sometimes miss — the airport's full name usually works better.
+- It's a shared public service with light rate limits, which is why lookups
+  require tapping **Find** rather than happening as you type. That's plenty
+  for planning a trip; it's not built for bulk/automated lookups.
 
 ## Customizing
 
@@ -93,3 +114,5 @@ It's plain HTML/CSS/JS, so it's easy to tweak by hand or ask Claude to edit:
   `fieldsToFormType`, `deriveTitle`, `deriveMeta`) and the matching form
   markup in `index.html` — add a field in both places to extend a type, or
   copy the pattern to add a whole new type.
+- The map and address lookup logic is in the "Geocoding" and "Map tab"
+  sections of `app.js`.

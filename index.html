@@ -18,6 +18,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 
 <link rel="stylesheet" href="style.css" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
 </head>
 <body>
 
@@ -89,8 +90,24 @@
             <label class="field"><span>Flight #</span><input type="text" id="f_number" placeholder="DL 123" /></label>
           </div>
           <div class="field-row">
-            <label class="field"><span>From</span><input type="text" id="f_from" placeholder="DFW" /></label>
-            <label class="field"><span>To</span><input type="text" id="f_to" placeholder="LIS" /></label>
+            <label class="field">
+              <span>From</span>
+              <div class="geo-input-row">
+                <input type="text" id="f_from" placeholder="DFW or Dallas Fort Worth Airport" />
+                <button type="button" class="geo-find-btn" data-geo="f_from">Find</button>
+              </div>
+              <div class="geo-status" id="f_from_status"></div>
+              <div class="geo-results" id="f_from_results" hidden></div>
+            </label>
+            <label class="field">
+              <span>To</span>
+              <div class="geo-input-row">
+                <input type="text" id="f_to" placeholder="LIS or Lisbon Airport" />
+                <button type="button" class="geo-find-btn" data-geo="f_to">Find</button>
+              </div>
+              <div class="geo-status" id="f_to_status"></div>
+              <div class="geo-results" id="f_to_results" hidden></div>
+            </label>
           </div>
           <div class="field-row">
             <label class="field"><span>Departs</span><input type="datetime-local" id="f_depart" /></label>
@@ -103,11 +120,27 @@
         <div class="type-fields" data-fields="car" hidden>
           <label class="field"><span>Rental company</span><input type="text" id="c_company" placeholder="Hertz" /></label>
           <div class="field-row">
-            <label class="field"><span>Pick-up location</span><input type="text" id="c_pickupLoc" /></label>
+            <label class="field">
+              <span>Pick-up location</span>
+              <div class="geo-input-row">
+                <input type="text" id="c_pickupLoc" />
+                <button type="button" class="geo-find-btn" data-geo="c_pickupLoc">Find</button>
+              </div>
+              <div class="geo-status" id="c_pickupLoc_status"></div>
+              <div class="geo-results" id="c_pickupLoc_results" hidden></div>
+            </label>
             <label class="field"><span>Pick-up time</span><input type="datetime-local" id="c_pickupTime" /></label>
           </div>
           <div class="field-row">
-            <label class="field"><span>Drop-off location</span><input type="text" id="c_dropoffLoc" /></label>
+            <label class="field">
+              <span>Drop-off location</span>
+              <div class="geo-input-row">
+                <input type="text" id="c_dropoffLoc" />
+                <button type="button" class="geo-find-btn" data-geo="c_dropoffLoc">Find</button>
+              </div>
+              <div class="geo-status" id="c_dropoffLoc_status"></div>
+              <div class="geo-results" id="c_dropoffLoc_results" hidden></div>
+            </label>
             <label class="field"><span>Drop-off time</span><input type="datetime-local" id="c_dropoffTime" /></label>
           </div>
           <label class="field"><span>Confirmation #</span><input type="text" id="c_conf" /></label>
@@ -116,7 +149,15 @@
         <!-- Stay fields -->
         <div class="type-fields" data-fields="stay" hidden>
           <label class="field"><span>Hotel / stay name</span><input type="text" id="s_name" /></label>
-          <label class="field"><span>Address</span><input type="text" id="s_address" /></label>
+          <label class="field">
+            <span>Address</span>
+            <div class="geo-input-row">
+              <input type="text" id="s_address" />
+              <button type="button" class="geo-find-btn" data-geo="s_address">Find</button>
+            </div>
+            <div class="geo-status" id="s_address_status"></div>
+            <div class="geo-results" id="s_address_results" hidden></div>
+          </label>
           <div class="field-row">
             <label class="field"><span>Check-in</span><input type="datetime-local" id="s_checkin" /></label>
             <label class="field"><span>Check-out</span><input type="datetime-local" id="s_checkout" /></label>
@@ -127,7 +168,15 @@
         <!-- Activity fields -->
         <div class="type-fields" data-fields="activity" hidden>
           <label class="field"><span>Name</span><input type="text" id="a_title" placeholder="Belém Tower" /></label>
-          <label class="field"><span>Location</span><input type="text" id="a_location" /></label>
+          <label class="field">
+            <span>Location</span>
+            <div class="geo-input-row">
+              <input type="text" id="a_location" placeholder="Address or place name" />
+              <button type="button" class="geo-find-btn" data-geo="a_location">Find</button>
+            </div>
+            <div class="geo-status" id="a_location_status"></div>
+            <div class="geo-results" id="a_location_results" hidden></div>
+          </label>
           <div class="field-row">
             <label class="field"><span>Time</span><input type="time" id="a_time" /></label>
             <label class="field"><span>Category</span>
@@ -175,6 +224,29 @@
       </div>
     </section>
 
+    <!-- ===================== MAP TAB ===================== -->
+    <section class="view" id="view-map" data-view="map">
+      <h1 class="view-title">Trip map</h1>
+      <p class="view-sub">Every flight, stay, and activity you've located shows up here.</p>
+
+      <label class="field">
+        <span>Show</span>
+        <select id="mapDayFilter"></select>
+      </label>
+
+      <div id="mapContainer" class="map-container"></div>
+      <div id="mapEmptyState" class="empty-hint" hidden>
+        <p>Nothing to show yet. Use the <strong>Find</strong> button on a flight, stay, or activity's location field to place it here.</p>
+      </div>
+
+      <div class="map-legend">
+        <span><i class="legend-dot flight"></i> Flight</span>
+        <span><i class="legend-dot car"></i> Car</span>
+        <span><i class="legend-dot stay"></i> Stay</span>
+        <span><i class="legend-dot activity"></i> Activity</span>
+      </div>
+    </section>
+
   </main>
 
   <nav class="tabbar" aria-label="Sections">
@@ -186,6 +258,9 @@
     </button>
     <button class="tab-btn" data-view="plan">
       <span class="tab-icon" aria-hidden="true">&#128506;&#65039;</span><span>Plan</span>
+    </button>
+    <button class="tab-btn" data-view="map">
+      <span class="tab-icon" aria-hidden="true">&#128205;</span><span>Map</span>
     </button>
   </nav>
 
@@ -258,6 +333,7 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.2/Sortable.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

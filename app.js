@@ -115,11 +115,122 @@
     document.querySelectorAll(".tab-btn").forEach((b) => b.classList.toggle("active", b.dataset.view === viewName));
     if (viewName === "plan") renderPlan();
     if (viewName === "add") renderAllItemsList();
+    if (viewName === "map") renderMap();
   }
 
   document.querySelectorAll(".tab-btn").forEach((btn) => {
     btn.addEventListener("click", () => switchView(btn.dataset.view));
   });
+
+  // ---------- Geocoding (Nominatim / OpenStreetMap, free, no key) ----------
+  const GEO_FIELDS = ["f_from", "f_to", "c_pickupLoc", "c_dropoffLoc", "s_address", "a_location"];
+
+  function geoData(id) {
+    const input = document.getElementById(id);
+    return { lat: (input && input.dataset.lat) || null, lon: (input && input.dataset.lon) || null };
+  }
+
+  function clearGeoField(id) {
+    const input = document.getElementById(id);
+    if (!input) return;
+    delete input.dataset.lat;
+    delete input.dataset.lon;
+    delete input.dataset.resolved;
+    const status = document.getElementById(id + "_status");
+    if (status) { status.textContent = ""; status.className = "geo-status"; }
+    const results = document.getElementById(id + "_results");
+    if (results) { results.innerHTML = ""; results.hidden = true; }
+  }
+
+  function restoreGeoField(id, lat, lon) {
+    const input = document.getElementById(id);
+    if (!input) return;
+    const status = document.getElementById(id + "_status");
+    if (lat && lon) {
+      input.dataset.lat = lat;
+      input.dataset.lon = lon;
+      if (status) { status.textContent = "\u2713 Located on map"; status.className = "geo-status found"; }
+    } else {
+      clearGeoField(id);
+    }
+  }
+
+  async function geocodeQuery(query) {
+    const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&q=${encodeURIComponent(query)}`;
+    const res = await fetch(url, { headers: { "Accept-Language": "en" } });
+    if (!res.ok) throw new Error("Geocode request failed");
+    return res.json();
+  }
+
+  function applyGeoMatch(id, match) {
+    const input = document.getElementById(id);
+    const status = document.getElementById(id + "_status");
+    const results = document.getElementById(id + "_results");
+    input.value = match.display_name;
+    input.dataset.lat = match.lat;
+    input.dataset.lon = match.lon;
+    status.textContent = "\u2713 Located on map";
+    status.className = "geo-status found";
+    results.innerHTML = "";
+    results.hidden = true;
+  }
+
+  function setupGeoField(id) {
+    const input = document.getElementById(id);
+    const btn = document.querySelector(`.geo-find-btn[data-geo="${id}"]`);
+    const status = document.getElementById(id + "_status");
+    const results = document.getElementById(id + "_results");
+    if (!input || !btn) return;
+
+    input.addEventListener("input", () => {
+      if (input.dataset.lat) clearGeoField(id);
+    });
+
+    btn.addEventListener("click", async () => {
+      const query = input.value.trim();
+      if (!query) {
+        status.textContent = "Type an address first";
+        status.className = "geo-status error";
+        return;
+      }
+      btn.disabled = true;
+      const prevLabel = btn.textContent;
+      btn.textContent = "Finding\u2026";
+      status.textContent = "";
+      status.className = "geo-status";
+      results.innerHTML = "";
+      results.hidden = true;
+      try {
+        const matches = await geocodeQuery(query);
+        if (!matches.length) {
+          status.textContent = "No matches \u2014 try a fuller address";
+          status.className = "geo-status error";
+        } else if (matches.length === 1) {
+          applyGeoMatch(id, matches[0]);
+        } else {
+          results.hidden = false;
+          matches.forEach((m) => {
+            const row = document.createElement("button");
+            row.type = "button";
+            row.className = "geo-result-item";
+            row.textContent = m.display_name;
+            row.addEventListener("click", () => applyGeoMatch(id, m));
+            results.appendChild(row);
+          });
+          status.textContent = "Pick the closest match:";
+        }
+      } catch (e) {
+        console.error(e);
+        status.textContent = "Couldn't reach the map lookup \u2014 check your connection";
+        status.className = "geo-status error";
+      } finally {
+        btn.disabled = false;
+        btn.textContent = prevLabel;
+      }
+    });
+  }
+
+  GEO_FIELDS.forEach(setupGeoField);
 
   // ---------- Generic bottom-sheet helpers ----------
   function openSheet(backdropId) {
@@ -342,6 +453,7 @@
   function resetItemForm() {
     itemForm.reset();
     itemIdInput.value = "";
+    GEO_FIELDS.forEach(clearGeoField);
     setActiveType(itemTypeInput.value || "flight");
     itemSubmitBtn.textContent = "Add to trip";
     itemCancelEdit.hidden = true;
@@ -351,31 +463,43 @@
 
   function collectFieldsForType(type) {
     switch (type) {
-      case "flight":
+      case "flight": {
+        const fromGeo = geoData("f_from");
+        const toGeo = geoData("f_to");
         return {
           airline: val("f_airline"), number: val("f_number"),
           from: val("f_from"), to: val("f_to"),
+          fromLat: fromGeo.lat, fromLon: fromGeo.lon,
+          toLat: toGeo.lat, toLon: toGeo.lon,
           depart: val("f_depart"), arrive: val("f_arrive"),
           confirmation: val("f_conf")
         };
-      case "car":
+      }
+      case "car": {
+        const puGeo = geoData("c_pickupLoc");
+        const doGeo = geoData("c_dropoffLoc");
         return {
           company: val("c_company"),
-          pickupLoc: val("c_pickupLoc"), pickupTime: val("c_pickupTime"),
-          dropoffLoc: val("c_dropoffLoc"), dropoffTime: val("c_dropoffTime"),
+          pickupLoc: val("c_pickupLoc"), pickupLat: puGeo.lat, pickupLon: puGeo.lon, pickupTime: val("c_pickupTime"),
+          dropoffLoc: val("c_dropoffLoc"), dropoffLat: doGeo.lat, dropoffLon: doGeo.lon, dropoffTime: val("c_dropoffTime"),
           confirmation: val("c_conf")
         };
-      case "stay":
+      }
+      case "stay": {
+        const geo = geoData("s_address");
         return {
-          name: val("s_name"), address: val("s_address"),
+          name: val("s_name"), address: val("s_address"), lat: geo.lat, lon: geo.lon,
           checkin: val("s_checkin"), checkout: val("s_checkout"),
           confirmation: val("s_conf")
         };
-      case "activity":
+      }
+      case "activity": {
+        const geo = geoData("a_location");
         return {
-          title: val("a_title"), location: val("a_location"),
+          title: val("a_title"), location: val("a_location"), lat: geo.lat, lon: geo.lon,
           time: val("a_time"), category: val("a_category")
         };
+      }
     }
   }
 
@@ -393,19 +517,25 @@
     if (type === "flight") {
       setVal("f_airline", fields.airline); setVal("f_number", fields.number);
       setVal("f_from", fields.from); setVal("f_to", fields.to);
+      restoreGeoField("f_from", fields.fromLat, fields.fromLon);
+      restoreGeoField("f_to", fields.toLat, fields.toLon);
       setVal("f_depart", fields.depart); setVal("f_arrive", fields.arrive);
       setVal("f_conf", fields.confirmation);
     } else if (type === "car") {
       setVal("c_company", fields.company);
-      setVal("c_pickupLoc", fields.pickupLoc); setVal("c_pickupTime", fields.pickupTime);
-      setVal("c_dropoffLoc", fields.dropoffLoc); setVal("c_dropoffTime", fields.dropoffTime);
+      setVal("c_pickupLoc", fields.pickupLoc); restoreGeoField("c_pickupLoc", fields.pickupLat, fields.pickupLon);
+      setVal("c_pickupTime", fields.pickupTime);
+      setVal("c_dropoffLoc", fields.dropoffLoc); restoreGeoField("c_dropoffLoc", fields.dropoffLat, fields.dropoffLon);
+      setVal("c_dropoffTime", fields.dropoffTime);
       setVal("c_conf", fields.confirmation);
     } else if (type === "stay") {
-      setVal("s_name", fields.name); setVal("s_address", fields.address);
+      setVal("s_name", fields.name);
+      setVal("s_address", fields.address); restoreGeoField("s_address", fields.lat, fields.lon);
       setVal("s_checkin", fields.checkin); setVal("s_checkout", fields.checkout);
       setVal("s_conf", fields.confirmation);
     } else if (type === "activity") {
-      setVal("a_title", fields.title); setVal("a_location", fields.location);
+      setVal("a_title", fields.title);
+      setVal("a_location", fields.location); restoreGeoField("a_location", fields.lat, fields.lon);
       setVal("a_time", fields.time); setVal("a_category", fields.category || "Place");
     }
   }
@@ -738,6 +868,134 @@
     closeSheet("editBackdrop");
     startEditItem(id);
   });
+
+  // ---------- Map tab ----------
+  const TYPE_COLORS = { flight: "#2F5C4E", car: "#6E8B3E", stay: "#3E6B4A", activity: "#5C9142" };
+  let leafletMap = null;
+  let markerLayer = null;
+
+  function ensureMap() {
+    if (leafletMap || typeof L === "undefined") return;
+    leafletMap = L.map("mapContainer", { scrollWheelZoom: true });
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+      maxZoom: 19
+    }).addTo(leafletMap);
+    markerLayer = L.layerGroup().addTo(leafletMap);
+    leafletMap.setView([20, 0], 2);
+  }
+
+  function collectMapMarkers(filter) {
+    const markers = [];
+    state.items.forEach((item) => {
+      if (filter === "unscheduled" && item.date) return;
+      if (filter && filter !== "all" && filter !== "unscheduled" && item.date !== filter) return;
+
+      const dateLabel = item.date ? formatShortDate(item.date) : "Not scheduled";
+
+      if (item.type === "flight") {
+        if (item.fields.fromLat && item.fields.fromLon) {
+          markers.push({ lat: +item.fields.fromLat, lon: +item.fields.fromLon, type: "flight",
+            title: `${item.title} \u2014 Departure`, sub: item.fields.from, dateLabel });
+        }
+        if (item.fields.toLat && item.fields.toLon) {
+          markers.push({ lat: +item.fields.toLat, lon: +item.fields.toLon, type: "flight",
+            title: `${item.title} \u2014 Arrival`, sub: item.fields.to, dateLabel });
+        }
+      } else if (item.type === "car") {
+        if (item.fields.pickupLat && item.fields.pickupLon) {
+          markers.push({ lat: +item.fields.pickupLat, lon: +item.fields.pickupLon, type: "car",
+            title: `${item.title} \u2014 Pick-up`, sub: item.fields.pickupLoc, dateLabel });
+        }
+        if (item.fields.dropoffLat && item.fields.dropoffLon) {
+          markers.push({ lat: +item.fields.dropoffLat, lon: +item.fields.dropoffLon, type: "car",
+            title: `${item.title} \u2014 Drop-off`, sub: item.fields.dropoffLoc, dateLabel });
+        }
+      } else if (item.type === "stay") {
+        if (item.fields.lat && item.fields.lon) {
+          markers.push({ lat: +item.fields.lat, lon: +item.fields.lon, type: "stay",
+            title: item.title, sub: item.fields.address, dateLabel });
+        }
+      } else if (item.type === "activity") {
+        if (item.fields.lat && item.fields.lon) {
+          markers.push({ lat: +item.fields.lat, lon: +item.fields.lon, type: "activity",
+            title: item.title, sub: item.fields.location, dateLabel });
+        }
+      }
+    });
+    return markers;
+  }
+
+  function populateMapDayFilter() {
+    const select = document.getElementById("mapDayFilter");
+    const prevValue = select.value;
+    select.innerHTML = "";
+    const optAll = document.createElement("option");
+    optAll.value = "all"; optAll.textContent = "All days";
+    select.appendChild(optAll);
+    tripDays().forEach((d, idx) => {
+      const opt = document.createElement("option");
+      opt.value = d;
+      opt.textContent = `Day ${idx + 1} \u2014 ${formatShortDate(d)}`;
+      select.appendChild(opt);
+    });
+    const optUn = document.createElement("option");
+    optUn.value = "unscheduled"; optUn.textContent = "Not yet scheduled";
+    select.appendChild(optUn);
+    const stillValid = Array.from(select.options).some((o) => o.value === prevValue);
+    select.value = stillValid ? prevValue : "all";
+  }
+
+  function drawMapMarkers() {
+    if (!leafletMap) return;
+    const filter = document.getElementById("mapDayFilter").value || "all";
+    const markers = collectMapMarkers(filter);
+    markerLayer.clearLayers();
+
+    const emptyState = document.getElementById("mapEmptyState");
+    const mapEl = document.getElementById("mapContainer");
+
+    if (markers.length === 0) {
+      emptyState.hidden = false;
+      mapEl.style.display = "none";
+      return;
+    }
+    emptyState.hidden = true;
+    mapEl.style.display = "block";
+    leafletMap.invalidateSize();
+
+    const bounds = [];
+    markers.forEach((m) => {
+      const marker = L.circleMarker([m.lat, m.lon], {
+        radius: 9,
+        color: "#fff",
+        weight: 2,
+        fillColor: TYPE_COLORS[m.type],
+        fillOpacity: 1
+      }).addTo(markerLayer);
+      marker.bindPopup(
+        `<div class="map-popup-title">${escapeHtml(m.title)}</div>` +
+        (m.sub ? `<div class="map-popup-meta">${escapeHtml(m.sub)}</div>` : "") +
+        `<div class="map-popup-meta">${escapeHtml(m.dateLabel)}</div>`
+      );
+      bounds.push([m.lat, m.lon]);
+    });
+
+    if (bounds.length === 1) {
+      leafletMap.setView(bounds[0], 13);
+    } else {
+      leafletMap.fitBounds(bounds, { padding: [30, 30] });
+    }
+  }
+
+  function renderMap() {
+    ensureMap();
+    populateMapDayFilter();
+    drawMapMarkers();
+    setTimeout(() => { if (leafletMap) leafletMap.invalidateSize(); }, 60);
+  }
+
+  document.getElementById("mapDayFilter").addEventListener("change", drawMapMarkers);
 
   // ---------- PDF export ----------
   document.getElementById("exportBtn").addEventListener("click", exportPdf);
