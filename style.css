@@ -266,6 +266,33 @@ button, input, select, textarea {
 .trip-summary strong { font-size: 1.05rem; }
 .trip-summary .muted { color: rgba(255,255,255,0.85); margin: 4px 0 0; font-size: 0.9rem; }
 
+.trip-summary-btn {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font-family: inherit;
+  cursor: pointer;
+  transition: transform 0.1s ease, box-shadow 0.15s ease;
+}
+.trip-summary-btn:active { transform: scale(0.98); }
+.trip-summary-name {
+  font-size: 1.22rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin-bottom: 6px !important;
+}
+.trip-summary-cta {
+  display: inline-block;
+  margin-top: 14px;
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: #fff;
+  background: rgba(255,255,255,0.18);
+  padding: 8px 14px;
+  border-radius: 100px;
+  backdrop-filter: blur(6px);
+}
+
 .empty-hint { text-align: center; color: var(--ink-muted); padding: 20px 10px; font-size: 0.92rem; }
 
 /* ---------- Segmented control ---------- */
@@ -370,6 +397,8 @@ button, input, select, textarea {
   color: var(--tag-activity-ink);
 }
 .item-day-badge.unscheduled { background: var(--grey-100); color: var(--ink-muted); }
+.badge-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.badge-row .item-day-badge { margin-top: 0; }
 
 .item-actions { display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
 .icon-btn {

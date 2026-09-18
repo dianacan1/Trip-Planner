@@ -272,6 +272,7 @@
     const summary = document.getElementById("tripSummary");
     if (start && end) {
       summary.hidden = false;
+      document.getElementById("summaryName").textContent = name || "Your trip";
       document.getElementById("summaryDates").textContent = `${formatShortDate(start)} \u2013 ${formatShortDate(end)}`;
       const count = tripDays().length;
       document.getElementById("summaryDayCount").textContent = count > 0 ? `${count} day${count === 1 ? "" : "s"}` : "End date is before start date";
@@ -279,6 +280,8 @@
       summary.hidden = true;
     }
   }
+
+  document.getElementById("tripSummary").addEventListener("click", () => switchView("add"));
 
   tripForm.addEventListener("submit", (e) => {
     e.preventDefault();
@@ -877,6 +880,31 @@
     return "";
   }
 
+  // Car rentals have a separate drop-off location/time worth surfacing wherever
+  // the pick-up details show, since it's often a different place and day.
+  function deriveCarDropoffLine(fields) {
+    const doLoc = fields.dropoffLoc ? `Drop off: ${fields.dropoffLoc}` : "";
+    const doTime = formatDateTimeShort(fields.dropoffTime);
+    return [doLoc, doTime].filter(Boolean).join(" \u00B7 ");
+  }
+
+  // Shared display helpers for a Plan-tab "entry" (a regular item, or one side of a car rental)
+  function entryTimeLabel(entry) {
+    if (entry.slot === "pickup") return formatTime(entry.item.fields.pickupTime);
+    if (entry.slot === "dropoff") return formatTime(entry.item.fields.dropoffTime);
+    return stubTimeLabel(entry.item);
+  }
+  function entryTitleLine(entry) {
+    if (entry.slot === "pickup") return `Car (Pick-up): ${entry.item.title}`;
+    if (entry.slot === "dropoff") return `Car (Drop-off): ${entry.item.title}`;
+    return `${TYPE_LABELS[entry.item.type]}: ${entry.item.title}`;
+  }
+  function entryMetaLine(entry) {
+    if (entry.slot === "pickup") return entry.item.fields.pickupLoc || "";
+    if (entry.slot === "dropoff") return entry.item.fields.dropoffLoc || "";
+    return deriveMeta(entry.item.type, entry.item.fields);
+  }
+
   // Which date does this item naturally belong to, if any (used to prefill assignment)
   function deriveDefaultDate(type, fields) {
     const src = type === "flight" ? fields.depart
@@ -931,9 +959,15 @@
         notes,
         date: autoDate,
         timeOverride: null,
-        order: Date.now()
+        order: Date.now(),
+        pickupOrder: Date.now(),
+        dropoffOrder: Date.now() + 1
       });
-      showToast(autoDate ? `Added and placed on ${formatShortDate(autoDate)}` : "Added to trip");
+      if (type === "car") {
+        showToast("Added \u2014 pick-up and drop-off will show on their own days");
+      } else {
+        showToast(autoDate ? `Added and placed on ${formatShortDate(autoDate)}` : "Added to trip");
+      }
     }
 
     saveState();
@@ -972,25 +1006,53 @@
       return;
     }
 
+    const tripDaySet = new Set(tripDays());
+
+    function sortKeyFor(item) {
+      if (item.type === "car") {
+        const candidates = [datePartOf(item.fields.pickupTime), datePartOf(item.fields.dropoffTime)]
+          .filter((d) => d && tripDaySet.has(d));
+        return candidates.length ? candidates.sort()[0] : null;
+      }
+      return item.date || null;
+    }
+
     const sorted = [...state.items].sort((a, b) => {
-      if (!!a.date !== !!b.date) return a.date ? -1 : 1;
-      if (a.date && b.date && a.date !== b.date) return a.date < b.date ? -1 : 1;
+      const ak = sortKeyFor(a), bk = sortKeyFor(b);
+      if (!!ak !== !!bk) return ak ? -1 : 1;
+      if (ak && bk && ak !== bk) return ak < bk ? -1 : 1;
       return a.order - b.order;
     });
 
     for (const item of sorted) {
       const row = document.createElement("div");
       row.className = "item-row";
-      const badge = item.date
-        ? `<span class="item-day-badge">${formatShortDate(item.date)}</span>`
-        : `<span class="item-day-badge unscheduled">Not scheduled</span>`;
+
+      let badgeHtml;
+      if (item.type === "car") {
+        const puDate = datePartOf(item.fields.pickupTime);
+        const doDate = datePartOf(item.fields.dropoffTime);
+        const puBadge = puDate && tripDaySet.has(puDate)
+          ? `<span class="item-day-badge">Pick-up ${formatShortDate(puDate)}</span>`
+          : `<span class="item-day-badge unscheduled">Pick-up not scheduled</span>`;
+        const doBadge = doDate && tripDaySet.has(doDate)
+          ? `<span class="item-day-badge">Drop-off ${formatShortDate(doDate)}</span>`
+          : `<span class="item-day-badge unscheduled">Drop-off not scheduled</span>`;
+        badgeHtml = `<div class="badge-row">${puBadge}${doBadge}</div>`;
+      } else {
+        badgeHtml = item.date
+          ? `<span class="item-day-badge">${formatShortDate(item.date)}</span>`
+          : `<span class="item-day-badge unscheduled">Not scheduled</span>`;
+      }
+
       row.innerHTML = `
         <div class="item-tag ${item.type}">${TYPE_ICONS[item.type]}</div>
         <div class="item-body">
           <div class="item-title">${escapeHtml(item.title)}</div>
           <div class="item-meta">${escapeHtml(deriveMeta(item.type, item.fields))}</div>
+          ${item.type === "car" && deriveCarDropoffLine(item.fields) ? `<div class="item-meta">${escapeHtml(deriveCarDropoffLine(item.fields))}</div>` : ""}
           ${item.notes ? `<div class="item-meta">${escapeHtml(item.notes)}</div>` : ""}
-          ${badge}
+          ${badgeHtml}
         </div>
         <div class="item-actions">
           <button class="icon-btn" data-edit="${item.id}" title="Edit">\u270E</button>
@@ -1013,10 +1075,13 @@
   // ---------- Render: Plan tab ----------
   let sortableInstances = [];
 
+  function datePartOf(dt) { return dt ? dt.split("T")[0] : ""; }
+  function timePartOf(dt) { const parts = dt ? dt.split("T") : []; return parts[1] || ""; }
+  function composeDateTime(date, time) { return date ? `${date}T${time || "00:00"}` : ""; }
+
   function stubTimeLabel(item) {
     if (item.timeOverride) return formatHHMM(item.timeOverride);
     if (item.type === "flight") return formatTime(item.fields.depart);
-    if (item.type === "car") return formatTime(item.fields.pickupTime);
     if (item.type === "stay") return formatTime(item.fields.checkin);
     if (item.type === "activity") return item.fields.time ? formatHHMM(item.fields.time) : "";
     return "";
@@ -1026,6 +1091,7 @@
     const el = document.createElement("div");
     el.className = `stub ${item.type}`;
     el.dataset.id = item.id;
+    el.dataset.slot = "main";
     const time = stubTimeLabel(item);
     el.innerHTML = `
       <div class="stub-time">${time || ""}</div>
@@ -1036,12 +1102,79 @@
       </div>
       <div class="stub-edit-hint" aria-hidden="true">&#8250;</div>
     `;
-    el.addEventListener("click", () => openEditSheet(item.id));
+    el.addEventListener("click", () => openEditSheet(item.id, "main"));
     return el;
+  }
+
+  // Cars render as two independent cards — one for pick-up, one for drop-off —
+  // each placed (and draggable) on its own day.
+  function buildCarSlotStub(item, slot) {
+    const el = document.createElement("div");
+    el.className = "stub car";
+    el.dataset.id = item.id;
+    el.dataset.slot = slot;
+
+    const isPickup = slot === "pickup";
+    const dt = isPickup ? item.fields.pickupTime : item.fields.dropoffTime;
+    const loc = isPickup ? item.fields.pickupLoc : item.fields.dropoffLoc;
+    const roleLabel = isPickup ? "Pick-up" : "Drop-off";
+    const timeLabel = dt ? formatTime(dt) : "";
+    const dateStr = datePartOf(dt);
+    const dateLabel = dateStr ? formatShortDate(dateStr) : "";
+
+    el.innerHTML = `
+      <div class="stub-time">${timeLabel}</div>
+      <div class="stub-body">
+        <div class="stub-title">${TYPE_ICONS.car} ${roleLabel} \u2014 ${escapeHtml(item.title)}</div>
+        <div class="stub-meta">${escapeHtml([loc, dateLabel].filter(Boolean).join(" \u00B7 "))}</div>
+        ${item.notes ? `<div class="stub-meta">${escapeHtml(item.notes)}</div>` : ""}
+      </div>
+      <div class="stub-edit-hint" aria-hidden="true">&#8250;</div>
+    `;
+    el.addEventListener("click", () => openEditSheet(item.id, slot));
+    return el;
+  }
+
+  function buildEntryStub(entry) {
+    if (entry.slot === "pickup" || entry.slot === "dropoff") return buildCarSlotStub(entry.item, entry.slot);
+    return buildStub(entry.item);
+  }
+
+  // Collects everything that belongs on a given day (or, when dateStr is null, the
+  // unassigned tray) — regular items by their single date, cars by pick-up/drop-off independently.
+  function collectEntriesForDate(dateStr, tripDaySet) {
+    const entries = [];
+    state.items.forEach((item) => {
+      if (item.type === "car") {
+        const pickupDate = datePartOf(item.fields.pickupTime);
+        const dropoffDate = datePartOf(item.fields.dropoffTime);
+        const pickupValid = pickupDate && tripDaySet.has(pickupDate);
+        const dropoffValid = dropoffDate && tripDaySet.has(dropoffDate);
+        const pickupOrder = item.pickupOrder != null ? item.pickupOrder : 0;
+        const dropoffOrder = item.dropoffOrder != null ? item.dropoffOrder : 0;
+
+        if (dateStr === null) {
+          if (!pickupValid) entries.push({ item, slot: "pickup", order: pickupOrder });
+          if (!dropoffValid) entries.push({ item, slot: "dropoff", order: dropoffOrder });
+        } else {
+          if (pickupValid && pickupDate === dateStr) entries.push({ item, slot: "pickup", order: pickupOrder });
+          if (dropoffValid && dropoffDate === dateStr) entries.push({ item, slot: "dropoff", order: dropoffOrder });
+        }
+      } else {
+        if (dateStr === null) {
+          if (!item.date) entries.push({ item, slot: "main", order: item.order });
+        } else if (item.date === dateStr) {
+          entries.push({ item, slot: "main", order: item.order });
+        }
+      }
+    });
+    entries.sort((a, b) => a.order - b.order);
+    return entries;
   }
 
   function renderPlan() {
     const days = tripDays();
+    const tripDaySet = new Set(days);
     const daysContainer = document.getElementById("daysContainer");
     const noTripMsg = document.getElementById("noTripMessage");
     const tray = document.getElementById("unassignedList");
@@ -1055,10 +1188,7 @@
     noTripMsg.hidden = days.length !== 0;
 
     // Unassigned tray
-    const unassigned = state.items
-      .filter((i) => !i.date)
-      .sort((a, b) => a.order - b.order);
-    unassigned.forEach((item) => tray.appendChild(buildStub(item)));
+    collectEntriesForDate(null, tripDaySet).forEach((entry) => tray.appendChild(buildEntryStub(entry)));
 
     sortableInstances.push(new Sortable(tray, {
       group: "planner",
@@ -1084,10 +1214,7 @@
       daysContainer.appendChild(block);
 
       const zone = block.querySelector(".day-zone");
-      const dayItems = state.items
-        .filter((i) => i.date === dateStr)
-        .sort((a, b) => a.order - b.order);
-      dayItems.forEach((item) => zone.appendChild(buildStub(item)));
+      collectEntriesForDate(dateStr, tripDaySet).forEach((entry) => zone.appendChild(buildEntryStub(entry)));
 
       sortableInstances.push(new Sortable(zone, {
         group: "planner",
@@ -1103,12 +1230,20 @@
 
   function applyZoneOrder(zone) {
     const date = zone.dataset.date || null;
-    const ids = Array.from(zone.children).map((c) => c.dataset.id);
-    ids.forEach((id, index) => {
-      const item = state.items.find((i) => i.id === id);
+    Array.from(zone.children).forEach((c, index) => {
+      const item = state.items.find((i) => i.id === c.dataset.id);
       if (!item) return;
-      item.date = date || null;
-      item.order = index;
+      const slot = c.dataset.slot || "main";
+      if (slot === "pickup") {
+        item.fields.pickupTime = composeDateTime(date, timePartOf(item.fields.pickupTime));
+        item.pickupOrder = index;
+      } else if (slot === "dropoff") {
+        item.fields.dropoffTime = composeDateTime(date, timePartOf(item.fields.dropoffTime));
+        item.dropoffOrder = index;
+      } else {
+        item.date = date;
+        item.order = index;
+      }
     });
   }
 
@@ -1120,15 +1255,25 @@
 
   // ---------- Plan-tab inline edit sheet ----------
   let editingItemId = null;
+  let editingSlot = "main";
 
-  function openEditSheet(id) {
+  function openEditSheet(id, slot) {
     const item = state.items.find((i) => i.id === id);
     if (!item) return;
     editingItemId = id;
-    document.getElementById("editSheetTitle").textContent = `Edit ${TYPE_LABELS[item.type].toLowerCase()}`;
+    editingSlot = slot || "main";
+
+    if (item.type === "car") {
+      const roleLabel = editingSlot === "dropoff" ? "drop-off" : "pick-up";
+      document.getElementById("editSheetTitle").textContent = `Edit ${roleLabel}`;
+      const dt = editingSlot === "dropoff" ? item.fields.dropoffTime : item.fields.pickupTime;
+      setTimeOnlyFieldValue("edit_time", timePartOf(dt));
+    } else {
+      document.getElementById("editSheetTitle").textContent = `Edit ${TYPE_LABELS[item.type].toLowerCase()}`;
+      const timeVal = item.timeOverride || deriveDefaultTimeHHMM(item.type, item.fields);
+      setTimeOnlyFieldValue("edit_time", timeVal || "");
+    }
     document.getElementById("edit_title").value = item.title || "";
-    const timeVal = item.timeOverride || deriveDefaultTimeHHMM(item.type, item.fields);
-    setTimeOnlyFieldValue("edit_time", timeVal || "");
     document.getElementById("edit_notes").value = item.notes || "";
     openSheet("editBackdrop");
   }
@@ -1147,8 +1292,19 @@
     if (newTitle) item.title = newTitle;
 
     const timeVal = document.getElementById("edit_time").value;
-    const naturalTime = deriveDefaultTimeHHMM(item.type, item.fields);
-    item.timeOverride = (timeVal && timeVal !== naturalTime) ? timeVal : null;
+
+    if (item.type === "car") {
+      const dateKey = editingSlot === "dropoff" ? "dropoffTime" : "pickupTime";
+      const existingDate = datePartOf(item.fields[dateKey]);
+      if (existingDate) {
+        item.fields[dateKey] = composeDateTime(existingDate, timeVal || "00:00");
+      }
+      // If this side hasn't been placed on a day yet, a time alone has nowhere to
+      // attach — drag it onto a day first, then the time can be set here.
+    } else {
+      const naturalTime = deriveDefaultTimeHHMM(item.type, item.fields);
+      item.timeOverride = (timeVal && timeVal !== naturalTime) ? timeVal : null;
+    }
 
     item.notes = document.getElementById("edit_notes").value.trim();
 
@@ -1161,7 +1317,11 @@
 
   document.getElementById("editDelete").addEventListener("click", () => {
     if (!editingItemId) return;
-    if (!confirm("Remove this item from your trip?")) return;
+    const item = state.items.find((i) => i.id === editingItemId);
+    const confirmMsg = item && item.type === "car"
+      ? "Remove this car rental? This removes both the pick-up and drop-off."
+      : "Remove this item from your trip?";
+    if (!confirm(confirmMsg)) return;
     state.items = state.items.filter((i) => i.id !== editingItemId);
     saveState();
     closeSheet("editBackdrop");
@@ -1349,6 +1509,7 @@
     y += 26;
 
     const days = tripDays();
+    const tripDaySet = new Set(days);
 
     if (days.length === 0) {
       doc.setTextColor(...forest);
@@ -1357,7 +1518,7 @@
     }
 
     days.forEach((dateStr, idx) => {
-      const dayItems = state.items.filter((i) => i.date === dateStr).sort((a, b) => a.order - b.order);
+      const dayEntries = collectEntriesForDate(dateStr, tripDaySet);
       ensureSpace(40);
       doc.setFont("helvetica", "bold");
       doc.setFontSize(14);
@@ -1365,24 +1526,24 @@
       doc.text(`Day ${idx + 1} \u2014 ${formatDayLabel(dateStr)}`, marginX, y);
       y += 18;
 
-      if (dayItems.length === 0) {
+      if (dayEntries.length === 0) {
         doc.setFont("helvetica", "italic");
         doc.setFontSize(10.5);
         doc.setTextColor(...muted);
         doc.text("Nothing planned yet", marginX + 10, y);
         y += 20;
       } else {
-        dayItems.forEach((item) => {
+        dayEntries.forEach((entry) => {
           ensureSpace(46);
-          const time = stubTimeLabel(item);
+          const time = entryTimeLabel(entry);
           doc.setFont("helvetica", "bold");
           doc.setFontSize(11);
           doc.setTextColor(...forest);
-          const titleLine = (time ? `${time}  \u2013  ` : "") + `${TYPE_LABELS[item.type]}: ${item.title}`;
+          const titleLine = (time ? `${time}  \u2013  ` : "") + entryTitleLine(entry);
           doc.text(titleLine, marginX + 10, y);
           y += 14;
 
-          const meta = deriveMeta(item.type, item.fields);
+          const meta = entryMetaLine(entry);
           if (meta) {
             doc.setFont("helvetica", "normal");
             doc.setFontSize(9.5);
@@ -1390,11 +1551,11 @@
             const metaLines = doc.splitTextToSize(meta, pageWidth - marginX * 2 - 10);
             metaLines.forEach((line) => { ensureSpace(12); doc.text(line, marginX + 10, y); y += 12; });
           }
-          if (item.notes) {
+          if (entry.item.notes) {
             doc.setFont("helvetica", "italic");
             doc.setFontSize(9.5);
             doc.setTextColor(...muted);
-            const noteLines = doc.splitTextToSize(item.notes, pageWidth - marginX * 2 - 10);
+            const noteLines = doc.splitTextToSize(entry.item.notes, pageWidth - marginX * 2 - 10);
             noteLines.forEach((line) => { ensureSpace(12); doc.text(line, marginX + 10, y); y += 12; });
           }
           y += 8;
@@ -1403,22 +1564,22 @@
       y += 6;
     });
 
-    const unscheduled = state.items.filter((i) => !i.date);
-    if (unscheduled.length > 0) {
+    const unscheduledEntries = collectEntriesForDate(null, tripDaySet);
+    if (unscheduledEntries.length > 0) {
       ensureSpace(40);
       doc.setFont("helvetica", "bold");
       doc.setFontSize(14);
       doc.setTextColor(...forest);
       doc.text("Not yet scheduled", marginX, y);
       y += 18;
-      unscheduled.forEach((item) => {
+      unscheduledEntries.forEach((entry) => {
         ensureSpace(30);
         doc.setFont("helvetica", "bold");
         doc.setFontSize(11);
         doc.setTextColor(...forest);
-        doc.text(`${TYPE_LABELS[item.type]}: ${item.title}`, marginX + 10, y);
+        doc.text(entryTitleLine(entry), marginX + 10, y);
         y += 14;
-        const meta = deriveMeta(item.type, item.fields);
+        const meta = entryMetaLine(entry);
         if (meta) {
           doc.setFont("helvetica", "normal");
           doc.setFontSize(9.5);
@@ -1445,4 +1606,5 @@
   loadTripFormFromState();
   renderAllItemsList();
   setActiveType("flight");
+  switchView("trip");
 })();

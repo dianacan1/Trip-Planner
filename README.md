@@ -85,12 +85,15 @@ regularly is a good way to keep a durable copy.
   the date pill for a scrollable calendar (it opens already scrolled to
   your trip's month) and the time pill for a scroll-wheel time picker.
   Everything you add lands in "Not yet scheduled" until you place it on a
-  day. (Flights, cars, and stays with a date/time will actually auto-place
-  themselves on the matching day — you can still drag them elsewhere.)
+  day. (Flights, stays, and car pick-up/drop-off with a date/time will
+  actually auto-place themselves on the matching day — you can still drag
+  them elsewhere.)
 - **Plan tab** — drag cards between the tray and any day, and reorder within
-  a day, to build the itinerary. Tap a card to edit its title, notes, and
-  time right there. Tap **Export PDF** in the top bar any time to download a
-  formatted itinerary.
+  a day, to build the itinerary. A car rental shows up as **two separate
+  cards** — one for pick-up, one for drop-off — since they're often on
+  different days; drag each independently. Tap a card to edit its title,
+  notes, and time right there. Tap **Export PDF** in the top bar any time
+  to download a formatted itinerary.
 - **Map tab** — every flight, car, stay, and activity you've looked up an
   address for shows up as a pin here, color-coded by type. Use the dropdown
   to filter to a single day. Tap a pin for details.

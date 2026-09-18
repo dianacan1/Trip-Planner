@@ -58,10 +58,12 @@
         <button type="submit" class="btn btn-navy">Save trip</button>
       </form>
 
-      <div class="card trip-summary" id="tripSummary" hidden>
+      <button type="button" class="card trip-summary trip-summary-btn" id="tripSummary" hidden>
+        <p class="trip-summary-name" id="summaryName"></p>
         <p><strong id="summaryDates"></strong></p>
         <p class="muted" id="summaryDayCount"></p>
-      </div>
+        <span class="trip-summary-cta">Add flights, cars, stays &amp; activities &rarr;</span>
+      </button>
 
       <div class="empty-hint" id="dataResetHint">
         <button id="resetAllBtn" class="btn-link danger">Clear all trip data on this device</button>
